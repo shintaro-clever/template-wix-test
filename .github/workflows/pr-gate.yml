@@ -27,7 +27,7 @@ jobs:
             const hasFigma = /https:\/\/(www\.)?figma\.com\/\S+/i.test(body);
 
             // ✅ Require at least one CHECKED checkbox
-            const hasCheckbox = /- \[[xX]\]/.test(body);
+            const hasCheckbox = /- \[[ xX]\]/.test(body);
 
             const errors = [];
             if (!hasIssueRef) errors.push('Missing issue reference. Add "Fixes #<issue_number>".');
