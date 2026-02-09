@@ -1,0 +1,31 @@
+name: PR Gate (Require Issue + Figma + Checklist)
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR body has required content
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.pull_request.body || "";
+
+            // Require "Fixes #<number>" or "Closes #<number>"
+            const hasIssueRef = /(Fixes|Closes)\s+#\d+/i.test(body);
+
+            // Require a Figma URL
+            const hasFigma = /https:\/\/(www\.)?figma\.com\/\S+/i.test(body);
+
+            // Require at least one checkbox (acceptance criteria)
+            const hasCheckbox = /- \[[ xX]\]/.test(body);
+
+            const errors = [];
+            if (!hasIssueRef) errors.push("Missing issue reference. Add `Fixes #<issue_number>`.");
+            if (!hasFigma) errors.push("Missing Figma URL. Add a figma.com link.");
+            if (!hasCheckbox) errors.push("Missing acceptance criteria checklist. Add at least one checkbox item.");
+
+            if (errors.length) core.setFailed(errors.join("\n"));
