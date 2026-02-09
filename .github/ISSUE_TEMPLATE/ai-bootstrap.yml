@@ -1,0 +1,40 @@
+name: "AI Bootstrap (Figma × GitHub × AI)"
+description: "Figma URL / AI thread URL / Acceptance Criteria を必須化"
+title: "[AI] "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        このIssueは「Figma × GitHub × AI」を連動させるための起点です。
+        PRでは `Fixes #<issue>` / Figma URL / ACチェック済み（最低1つ）を必須にしてください。
+
+  - type: input
+    id: figma_url
+    attributes:
+      label: "Figma URL"
+      description: "figma.com/design または figma.com/file"
+      placeholder: "https://www.figma.com/design/..."
+    validations:
+      required: true
+
+  - type: input
+    id: ai_thread_url
+    attributes:
+      label: "AI thread URL"
+      description: "ChatGPT / Gemini / Claude など、会話ログの参照URL（無ければ後で追記）"
+      placeholder: "https://chatgpt.com/..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: "Acceptance Criteria"
+      description: "チェックボックスで最低3つ（PR Gateで - [x] が最低1つ必要）"
+      value: |
+        - [ ] PR本文に Fixes #<this issue> がある
+        - [ ] PR本文に Figma URL がある
+        - [ ] PR本文に - [x] のACが最低1つある
+    validations:
+      required: true
