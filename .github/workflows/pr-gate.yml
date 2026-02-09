@@ -3,6 +3,7 @@ name: PR Gate (Require Issue + Figma + Checklist)
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  workflow_dispatch:
 
 jobs:
   validate:
