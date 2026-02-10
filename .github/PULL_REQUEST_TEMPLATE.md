@@ -4,10 +4,6 @@ Fixes #
 ## Summary
 -
 
-## Acceptance Criteria Checklist
-- [x] AC: 
-
-## Notes
-- (optional) AI used: ChatGPT / Gemini / Claude
-- (optional) AI thread URL(s):
-  - https://
+## Acceptance Criteria
+- [ ] 1
+- [x] gate pass (最低1つは必ず[x]にする)
