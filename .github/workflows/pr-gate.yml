@@ -13,32 +13,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Validate PR body (Fixes/Closes + at least one checked item)
+      - name: PR本文を検証（関連Issue or No Issue + ACチェック）
         uses: actions/github-script@v7
         with:
           script: |
-            const body = (context.payload.pull_request && context.payload.pull_request.body)
-              ? context.payload.pull_request.body
-              : "";
-            const title = (context.payload.pull_request && context.payload.pull_request.title)
-              ? context.payload.pull_request.title
-              : "";
+            const body = context.payload.pull_request?.body ?? "";
+            const title = context.payload.pull_request?.title ?? "";
 
-            // A) Issueリンク（Fixes/Closes/Resolves）: "Fixes #123" / "Closes #123" / "Resolves #123"
-            // - 大文字小文字は無視
-            const issueLinkRegex = /(fixes|closes|resolves)\s+#\d+/i;
-            const hasIssueLink = issueLinkRegex.test(body);
+            // A) 関連Issueあり（チェック済み + #番号必須）
+            // 例: - [x] 関連Issueあり: #123
+            const hasIssueChecked = /^\s*[-*]\s+\[[xX]\]\s+関連Issueあり:\s*#\d+\s*$/m.test(body);
 
-            // B) チェック済みチェックボックス: "- [x] ..." / "* [x] ..."
-            const checkedBoxRegex = /^\s*[-*]\s+\[[xX]\]\s+/m;
-            const hasCheckedBox = checkedBoxRegex.test(body);
+            // B) No Issue（理由）（チェック済み + 理由必須）
+            // 例: - [x] No Issue（理由）: 文言修正のため
+            const hasNoIssueChecked = /^\s*[-*]\s+\[[xX]\]\s+No Issue（理由）:\s+\S.+$/m.test(body);
+
+            // C) ACチェック（チェック済み + 内容必須）
+            // 例: - [x] AC: PR Gateが緑になる
+            const hasCheckedAC = /^\s*[-*]\s+\[[xX]\]\s+AC:\s+\S.+$/m.test(body);
 
             const errors = [];
-            if (!hasIssueLink) {
-              errors.push("PR本文に Issue 連動が必要です（例: `Fixes #123` / `Closes #123` / `Resolves #123`）。");
+
+            if (!hasIssueChecked && !hasNoIssueChecked) {
+              errors.push("PR本文に `関連Issueあり: #番号` か `No Issue（理由）: 理由` のチェック済み項目が必要です。");
             }
-            if (!hasCheckedBox) {
-              errors.push("PR本文にチェック済み項目が最低1つ必要です（例: `- [x] AC: ...`）。");
+
+            if (!hasCheckedAC) {
+              errors.push("PR本文にチェック済みの `AC:` が最低1つ必要です（例: `- [x] AC: ...`）。");
             }
 
             if (errors.length) {
@@ -49,11 +50,11 @@ jobs:
                   ...errors.map(e => `- ${e}`),
                   "",
                   "Tip:",
-                  "- 固定情報（Figma/AI thread 等）は Issue 側に集約し、PRは「実装の合否」だけにしてください。",
-                  "- PRテンプレをこのGateに通る形へ固定すると、失敗率が下がります。",
+                  "- 軽度修正のみの場合は `No Issue（理由）` を使ってください。",
+                  "- Figma/AI thread 等の固定情報は Issue 側に集約し、PRは「実装の合否」中心にしてください。",
                 ].join("\n")
               );
             } else {
-              core.info("PR Gate passed: Issue link + at least one checked checkbox found.");
+              core.info("PR Gate passed: (Issue checkbox OR No Issue checkbox) + at least one checked AC found.");
               core.info(`Title: ${title}`);
             }
