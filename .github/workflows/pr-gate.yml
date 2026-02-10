@@ -12,7 +12,6 @@ jobs:
   validate:
     name: validate
     runs-on: ubuntu-latest
-
     steps:
       - name: Validate PR body has required fields
         uses: actions/github-script@v7
@@ -42,7 +41,7 @@ jobs:
                 `PR Gate failed:\n- ${errors.join("\n- ")}\n\n` +
                 `Expected in PR body:\n` +
                 `1) Fixes #123 or Closes #123\n` +
-                `2) At least one checked box: - [x] ...\n`
+                `2) At least one checked box: - [x] ...`
               );
             } else {
               core.info("PR Gate passed ✅");
