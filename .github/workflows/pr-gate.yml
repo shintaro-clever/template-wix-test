@@ -2,47 +2,60 @@ name: PR Gate
 
 on:
   pull_request:
-    types: [opened, edited, reopened, synchronize]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
 
 permissions:
-  contents: read
   pull-requests: read
 
 jobs:
   validate:
     name: validate
     runs-on: ubuntu-latest
+
     steps:
-      - name: Validate PR body has required fields
+      - name: Validate PR body (Fixes/Closes + at least one checked item)
         uses: actions/github-script@v7
         with:
           script: |
-            const pr = context.payload.pull_request;
-            const body = (pr && pr.body) ? pr.body : "";
+            const body = (context.payload.pull_request && context.payload.pull_request.body)
+              ? context.payload.pull_request.body
+              : "";
+            const title = (context.payload.pull_request && context.payload.pull_request.title)
+              ? context.payload.pull_request.title
+              : "";
 
-            // 1) Linked Issue: Fixes #123 / Closes #123
-            const issueRegex = /\b(?:Fixes|Closes)\s+#\d+\b/i;
+            // A) Issueリンク（Fixes/Closes/Resolves）: "Fixes #123" / "Closes #123" / "Resolves #123"
+            // - 大文字小文字は無視
+            // - "fixes #123" なども許容
+            const issueLinkRegex = /(fixes|closes|resolves)\s+#\d+/i;
+            const hasIssueLink = issueLinkRegex.test(body);
 
-            // 2) Acceptance Criteria: チェック済みが最低1つ
-            // - [x] も - [X] も許可
-            const checkedBoxRegex = /-\s*\[[xX]\]\s+.+/;
+            // B) チェック済みチェックボックス: "- [x] ..." / "* [x] ..."
+            // - 大文字Xも許容
+            const checkedBoxRegex = /^\s*[-*]\s+\[[xX]\]\s+/m;
+            const hasCheckedBox = checkedBoxRegex.test(body);
 
             const errors = [];
-
-            if (!issueRegex.test(body)) {
-              errors.push('Missing "Fixes #<number>" or "Closes #<number>".');
+            if (!hasIssueLink) {
+              errors.push("PR本文に Issue 連動が必要です（例: `Fixes #123` / `Closes #123` / `Resolves #123`）。");
             }
-            if (!checkedBoxRegex.test(body)) {
-              errors.push('Missing checked Acceptance Criteria (e.g., "- [x] ...").');
+            if (!hasCheckedBox) {
+              errors.push("PR本文にチェック済み項目が最低1つ必要です（例: `- [x] AC: ...`）。");
             }
 
             if (errors.length) {
               core.setFailed(
-                `PR Gate failed:\n- ${errors.join("\n- ")}\n\n` +
-                `Expected in PR body:\n` +
-                `1) Fixes #123 or Closes #123\n` +
-                `2) At least one checked box: - [x] ...`
+                [
+                  "PR Gate failed.",
+                  "",
+                  ...errors.map(e => `- ${e}`),
+                  "",
+                  "Tip:",
+                  "- 固定情報（Figma/AI thread 等）は Issue 側に集約し、PRは「実装の合否」だけにしてください。",
+                  "- PRテンプレをこのGateに通る形へ固定すると、失敗率が下がります。",
+                ].join("\n")
               );
             } else {
-              core.info("PR Gate passed ✅");
+              core.info("PR Gate passed: Issue link + at least one checked checkbox found.");
+              core.info(`Title: ${title}`);
             }
