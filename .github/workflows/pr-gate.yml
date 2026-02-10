@@ -24,9 +24,12 @@ jobs:
               ? context.payload.pull_request.title
               : "";
 
+            // A) Issueリンク（Fixes/Closes/Resolves）: "Fixes #123" / "Closes #123" / "Resolves #123"
+            // - 大文字小文字は無視
             const issueLinkRegex = /(fixes|closes|resolves)\s+#\d+/i;
             const hasIssueLink = issueLinkRegex.test(body);
 
+            // B) チェック済みチェックボックス: "- [x] ..." / "* [x] ..."
             const checkedBoxRegex = /^\s*[-*]\s+\[[xX]\]\s+/m;
             const hasCheckedBox = checkedBoxRegex.test(body);
 
