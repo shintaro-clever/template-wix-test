@@ -1,17 +1,13 @@
 ## Linked Issue
 Fixes #
 
-## Figma
-https://www.figma.com/design/
-
-## AI thread URL
-https://chatgpt.com/
-
 ## Summary
-- 
+-
 
 ## Acceptance Criteria Checklist
-- [ ] AC: 
+- [x] AC: 
 
-## Notes for Reviewers
-- 
+## Notes
+- (optional) AI used: ChatGPT / Gemini / Claude
+- (optional) AI thread URL(s):
+  - https://
