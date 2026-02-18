@@ -1,0 +1,16 @@
+{
+  "connect": {
+    "orgId": "org-demo",
+    "repo": "example/figma-ai-gate",
+    "tokenKeyRef": "vault://org-demo/github/example-figma-ai-gate",
+    "enabled": true,
+    "operation": "connect"
+  },
+  "rotate": {
+    "orgId": "org-demo",
+    "repo": "example/figma-ai-gate",
+    "oldTokenKeyRef": "vault://org-demo/github/example-figma-ai-gate",
+    "newTokenKeyRef": "vault://org-demo/github/example-figma-ai-gate-2026-02",
+    "operation": "rotate_token"
+  }
+}

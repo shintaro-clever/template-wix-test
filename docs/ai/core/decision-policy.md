@@ -39,3 +39,13 @@ Impact:
 Links:
 - Figma: ...
 - PR: ...
+
+Phase1（solo）完了条件達成
+
+Codex CLI 導入（npm global）とプロジェクト設定（.codex/）を整備
+
+PR Gate（actions/github-script）運用が成立：PR本文の「関連Issue/No Issue」二択 + AC最低1つチェックを必須化
+
+Gate通過証跡を docs/ai/core/MANUAL_pr-gate.md に集約（Actions Run URL を記録）
+
+以後、軽微変更は No Issue（理由） 運用を許容し、参照リンクは原則 Issue / docs に集約

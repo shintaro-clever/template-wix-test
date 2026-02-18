@@ -106,3 +106,34 @@
 ### Phase 3（強制）
 - 必要になった時点で branch protection / ruleset / CODEOWNERS を検討
 - いきなり全repo強制はしない（段階的に適用）
+
+
+## Phase2（Integration Hub）運用差分
+
+- Phase1の`.github/`限定方針は継続しつつ、`docs/ai/core/phase2-integration-hub.md` に沿って RBAC / Vault / GitHub Integration / Settings UI を連動させる。
+- Gateで検出した不足事項は Issue #21 に戻して Decision を追記し、SoTを崩さない（Acceptance Criteria のチェックも同Issueで更新）。
+- Vaultは Option A（未保存）をデフォルトに固定し、GitHubトークンは `docs/ai/core/vault-provider.md` のマスク運用で扱う。
+- GitHub連携対象は `docs/ai/core/github-integration.md` のテーブルに登録済みであること（`tokenKeyRef` は Vaultキー参照のみ）。
+- 設定作業や Gate override は必ず `audit_logs` の `github_integration` / `gate_override` 行として残す。
+- Gateが緑になった run URL は Phase1同様にこのマニュアルへ追記し、レビュー時に参照できるよう固定する。
+
+## Phase2-min docs evidence (Issue #21)
+
+- Date: 2026-02-18
+- PR: https://github.com/shintaro-clver/figma-ai-github-workflow/pull/23
+- Actions Run: https://github.com/shintaro-clver/figma-ai-github-workflow/actions/runs/22142261886
+- Notes: Phase2-min docs-only (T4/T5/T6) evidence; no .github changes
+
+## Phase2 Gate 通過証跡
+
+- PR: <PR URL（Phase2 enforcement 対応）>
+- Actions Run: <Actions run URL>
+- Date: YYYY-MM-DD
+- Notes: Vault Option A / Issue #21 Decision 更新完了
+
+## Phase1（solo）Gate 通過証跡
+
+- PR: https://github.com/shintaro-clver/figma-ai-github-workflow/pull/20
+- Actions Run: https://github.com/shintaro-clver/figma-ai-github-workflow/actions/runs/22140619772
+- Date: YYYY-MM-DD
+- Notes: No Issue 運用で実施（軽微な docs 更新）

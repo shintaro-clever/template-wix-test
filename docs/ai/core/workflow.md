@@ -34,3 +34,4 @@ The goal is: PR → Issue → Figma → Decision must always be traceable.
 - Design source: Figma (linked to Issue)
 - Implementation source: GitHub PR / code
 - Review history: GitHub PR
+- Phase2 enforcement design (RBAC / Vault / Audit): `docs/ai/core/phase2-integration-hub.md`
