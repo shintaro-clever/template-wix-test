@@ -96,6 +96,13 @@
 ### Phase 2（任意運用）
 - レビュー運用でテンプレ未記入は差し戻しにする（仕組みではなく運用で強制）
 
+-   +## Phase2-min docs evidence (Issue #21)
+  +
+  +- Date: YYYY-MM-DD
+  +- PR: <PASTE_PR_URL_HERE>
+  +- Actions Run: <PASTE_ACTIONS_RUN_URL_HERE>
+  +- Notes: Phase2-min docs-only (T4/T5/T6) evidence; no .github changes
+
 ### Phase 3（強制）
 - 必要になった時点で branch protection / ruleset / CODEOWNERS を検討
 - いきなり全repo強制はしない（段階的に適用）
