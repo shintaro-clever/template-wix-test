@@ -1,0 +1,32 @@
+{
+  "job_type": "integration_hub.phase2.mcp.offline_smoke",
+  "goal": "Verify MCP runner pipeline offline (no network, no claude)",
+  "inputs": {
+    "message": "Run the local MCP stub to capture handshake metadata",
+    "target_path": ".ai-runs/{{run_id}}/claude_mcp_smoketest.json",
+    "mcp_provider": "local_stub",
+    "timeout_ms": 5000,
+    "mcp_servers": []
+  },
+  "constraints": {
+    "allowed_paths": [".ai-runs/"],
+    "max_files_changed": 1,
+    "no_destructive_ops": true
+  },
+  "acceptance_criteria": [
+    "run.json and audit.jsonl are written under .ai-runs/<run_id>/",
+    "claude_mcp_smoketest.json is produced on success"
+  ],
+  "provenance": {
+    "issue": "https://github.com/example/repo/issues/21",
+    "operator": "operator"
+  },
+  "run_mode": "mcp",
+  "output_language": "ja",
+  "expected_artifacts": [
+    {
+      "name": "claude_mcp_smoketest.json",
+      "description": "Offline MCP stub handshake log"
+    }
+  ]
+}

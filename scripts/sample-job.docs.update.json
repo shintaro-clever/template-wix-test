@@ -1,0 +1,31 @@
+{
+  "job_type": "integration_hub.phase2.docs_update",
+  "goal": "Update docs safely with minimal diff",
+  "inputs": {
+    "message": "Docs update selftest",
+    "target_path": ".ai-runs/{{run_id}}/docs_update_report.json",
+    "doc_path": "docs/.selftest-doc.md",
+    "instruction": "Add selftest note"
+  },
+  "constraints": {
+    "allowed_paths": ["docs/", ".ai-runs/"],
+    "max_files_changed": 1,
+    "no_destructive_ops": true
+  },
+  "acceptance_criteria": [
+    "Docs diff limited to docs/ with <= 1 file changed",
+    "run.json and audit.jsonl captured under .ai-runs/<run_id>/"
+  ],
+  "provenance": {
+    "issue": "https://github.com/example/repo/issues/21",
+    "operator": "operator"
+  },
+  "run_mode": "local_stub",
+  "output_language": "ja",
+  "expected_artifacts": [
+    {
+      "name": "docs_update_report.json",
+      "description": "Summary of docs changes"
+    }
+  ]
+}

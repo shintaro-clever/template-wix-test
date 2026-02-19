@@ -1,0 +1,31 @@
+{
+  "job_type": "integration_hub.phase2.repo_patch",
+  "goal": "Patch Hub fallback HTML",
+  "inputs": {
+    "message": "Apply repo patch instruction to jobs.html",
+    "target_path": "apps/hub/static/jobs.html",
+    "instruction": "Add offline smoke reminder to fallback builder helper.",
+    "allowed_paths": ["apps/hub/static/", ".ai-runs/"]
+  },
+  "constraints": {
+    "allowed_paths": ["apps/hub/static/", ".ai-runs/"],
+    "max_files_changed": 1,
+    "no_destructive_ops": true
+  },
+  "acceptance_criteria": [
+    "jobs.html is modified in exactly one location.",
+    "run.json records repo_patch result."
+  ],
+  "provenance": {
+    "issue": "https://github.com/example/repo/issues/21",
+    "operator": "operator"
+  },
+  "run_mode": "local_stub",
+  "output_language": "ja",
+  "expected_artifacts": [
+    {
+      "name": "repo_patch_report.json",
+      "description": "Summary of repo patch"
+    }
+  ]
+}
