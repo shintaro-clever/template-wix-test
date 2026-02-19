@@ -1,0 +1,8 @@
+{
+  "name": "integration-hub-phase1",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node scripts/selftest.js"
+  }
+}
