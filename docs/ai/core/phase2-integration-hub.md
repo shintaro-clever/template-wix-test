@@ -1,9 +1,20 @@
 # Integration Hub Phase2 Design Memo
 
 ## Purpose / Scope
-- Phase2 moves from observe-only gating to enforced operations across the Integration Hub owned repos.
+- Phase1 (v0.5) ship—the job spec (`src/jobSpec.js`), runner stub (`scripts/runner-stub.js`), UI (`hub/index.html`), and evidence path (`.ai-runs/<run_id>/artifact.txt`)—is now the source of truth (SoT). Phase2 extends this exact contract rather than inventing a new one.
+- Phase2 moves from observe-only gating to enforced operations across the Integration Hub owned repos while remaining backward-compatible with the Phase1 contract.
 - All requirements here update the source of truth for how automation, secrets, and access control must behave starting Phase2 cutover.
 - Implementations outside `.github/` or docs remain unchanged; engineering teams must adapt to these guardrails.
+
+### Phase1 Contract Anchors (must remain stable)
+- **Job Spec**: Required fields (`job_type`, `goal`, `inputs`, `constraints`, `acceptance_criteria`, `provenance`, `run_mode`, `expected_artifacts`) as defined in `src/jobSpec.js`. Phase2 services must ingest the same schema and may only extend via optional fields.
+- **Runner Result**: `{ status: 'ok' | 'error', artifacts, diff_summary, checks, logs, provenance }` shape. Phase2 runners can append data but cannot change the meaning of existing keys.
+- **Hub Surface / API**: `/api/validate` and `/api/run` endpoints (plus the static UI in `hub/index.html`) are the minimal integration points. Future services should proxy/augment these endpoints rather than bypassing them.
+- **Evidence Location**: `.ai-runs/<run_id>/artifact.txt` acts as the human-auditable record in Phase1. Phase2 may mirror or migrate artifacts into Vault/object storage, but the CLI/UI must still expose a traceable artifact path per run.
+
+### Out-of-Scope for this PR
+- This document does **not** implement RBAC/Vault/Audit services; it only codifies how Phase2 will plug into the existing Phase1 contract.
+- Actual service code, database migrations, secret storage, or workflow enforcement remain Phase2 deliverables tracked separately.
 
 ## RBAC Model (Owner / Member / Viewer)
 ### Owner
@@ -73,6 +84,8 @@ All events must be written to an auditable sink (data store TBD for Phase2); the
 - Actions Run: https://github.com/shintaro-clver/figma-ai-github-workflow/actions/runs/22140619772
 
 ## Implementation Notes
+- Phase1 UI/server (`hub/index.html`, `/api/validate`, `/api/run`) stays authoritative for contract testing; Phase2 services should proxy these endpoints or supply drop-in replacements using the same request/response shapes.
+- MCP runner bridge (see `docs/ai/core/mcp-runner.md`) defines how CLI-based connectors plug into `/api/run` via `run_mode: 'mcp'`.
 - RBAC + Vault mappings ship as code under `.github/access/` (tracked separately) with required reviews by both owners.
 - GitHub read-only integration onboarding flow: `docs/ai/core/github-integration.md`.
 - Settings UI contract (integrations/audit screens): `docs/ai/core/settings-ui.md`.
