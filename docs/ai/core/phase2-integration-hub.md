@@ -84,6 +84,7 @@ All events must be written to an auditable sink (data store TBD for Phase2); the
 - Actions Run: https://github.com/shintaro-clver/figma-ai-github-workflow/actions/runs/22140619772
 
 ## Implementation Notes
+- Phase1互換を保つため、運用オペレーションは必ず **Offline smoke → Docs Update → Repo Patch（allowed_pathsで限定）** の順で段階導入する。offline smoke で接続/配線を確認し、docs_update で安全な1ファイル差分を適用し、最後に repo_patch で限定的なコード改変を許可する。
 - Phase1 UI/server (`hub/index.html`, `/api/validate`, `/api/run`) stays authoritative for contract testing; Phase2 services should proxy these endpoints or supply drop-in replacements using the same request/response shapes.
 - MCP runner bridge (see `docs/ai/core/mcp-runner.md`) defines how CLI-based connectors plug into `/api/run` via `run_mode: 'mcp'`.
 - RBAC + Vault mappings ship as code under `.github/access/` (tracked separately) with required reviews by both owners.

@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>Hub Jobs Console (Fallback)</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", sans-serif;
+        margin: 0;
+        background: #f5f5f5;
+        color: #111;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 24px 40px 0 40px;
+      }
+      .topbar h1 {
+        margin: 0 0 4px 0;
+        font-size: 24px;
+      }
+      .topbar p {
+        margin: 0;
+        color: #555;
+        max-width: 720px;
+      }
+      .lang-switch {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .lang-switch label {
+        font-weight: 600;
+      }
+      select,
+      input,
+      textarea {
+        font: inherit;
+      }
+      main {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        padding: 24px 40px 40px 40px;
+      }
+      .panel {
+        background: #fff;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+        flex: 1 1 420px;
+        max-width: 720px;
+      }
+      .panel h2 {
+        margin-top: 0;
+      }
+      .rule-line {
+        margin-top: 6px;
+        font-weight: 600;
+        color: #b13434;
+      }
+      label span {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: #555;
+      }
+      label input,
+      label textarea {
+        width: 100%;
+        margin-top: 4px;
+        margin-bottom: 12px;
+        padding: 8px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        background: #fafafa;
+      }
+      textarea {
+        min-height: 120px;
+        resize: vertical;
+      }
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      button {
+        padding: 10px 16px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        font-weight: 600;
+        background: #222;
+        color: #fff;
+      }
+      .output-area textarea {
+        background: #0b0b0b;
+        color: #f7f7f7;
+        padding: 12px;
+        border-radius: 10px;
+        border: none;
+        min-height: 240px;
+      }
+      .command-block {
+        margin-top: 8px;
+        font-size: 14px;
+        color: #555;
+      }
+      .command-block code {
+        display: inline-block;
+        background: #eee;
+        padding: 4px 6px;
+        border-radius: 6px;
+        color: #222;
+      }
+      .error {
+        color: #c0392b;
+        font-weight: 600;
+        min-height: 20px;
+      }
+      .gate {
+        margin-top: 16px;
+        border-top: 1px solid #eee;
+        padding-top: 16px;
+      }
+      .gate-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 12px;
+      }
+      .gate-label {
+        font-weight: 600;
+        color: #555;
+        min-width: 160px;
+      }
+      .status-badge {
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+      .status-ok {
+        background: #e3f7e6;
+        color: #206030;
+      }
+      .status-error {
+        background: #fde4e3;
+        color: #a62017;
+      }
+      ul {
+        padding-left: 20px;
+      }
+      @media (max-width: 720px) {
+        .topbar {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 16px;
+        }
+        main {
+          padding: 16px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1 data-i18n="title">Hub Jobs Console (Fallback)</h1>
+        <p data-i18n="subtitle">
+          npm install 不要。Offline smoke → Docs Update → Repo Patch をここで生成し、run.json / audit.jsonl を貼り付けて Gate / Triage を確認できます。
+        </p>
+        <p data-i18n="subtitleRule" class="rule-line">絶対ルール：本番ジョブ前に offline smoke（local_stub）を必ず実行する。</p>
+      </div>
+      <div class="lang-switch">
+        <label for="langSelect" data-i18n="languageLabel">言語</label>
+        <select id="langSelect">
+          <option value="ja">日本語</option>
+          <option value="en">English</option>
+        </select>
+      </div>
+    </header>
+    <main>
+      <section class="panel" id="builderPanel">
+        <h2 data-i18n="builderTitle">Job Builder</h2>
+        <p data-i18n="builderDescription">
+          まず Offline smoke ジョブを生成して保存 → `node scripts/run-job.js --job ... --role operator` を実行し、成功したら Docs Update → Repo Patch の順に進めます。
+        </p>
+        <label>
+          <span data-i18n="operatorLabel">Operator</span>
+          <input id="operatorInput" value="operator" />
+        </label>
+        <label>
+          <span data-i18n="issueLabel">Issue URL（任意）</span>
+          <input
+            id="issueInput"
+            value="https://github.com/example/repo/issues/21"
+            data-i18n-placeholder="issuePlaceholder"
+            placeholder="https://github.com/.."
+          />
+        </label>
+        <label>
+          <span data-i18n="docPathLabel">Docs path (docs_update)</span>
+          <input id="docPathInput" value="docs/.selftest-doc.md" />
+        </label>
+        <label>
+          <span data-i18n="docInstructionLabel">Instruction (docs_update)</span>
+          <input
+            id="docInstructionInput"
+            value="Add selftest note"
+            data-i18n-placeholder="docInstructionPlaceholder"
+            placeholder="例: READMEに1行追加"
+          />
+        </label>
+        <label>
+          <span data-i18n="repoPathLabel">target_path (repo_patch)</span>
+          <input id="repoPathInput" value="apps/hub/static/jobs.html" />
+        </label>
+        <label>
+          <span data-i18n="repoInstructionLabel">Instruction (repo_patch)</span>
+          <input
+            id="repoInstructionInput"
+            data-i18n-placeholder="repoInstructionPlaceholder"
+            placeholder="修正内容を一文で"
+          />
+        </label>
+        <div class="button-row">
+          <button id="offlineBtn" data-i18n="offlineBtn">Offline Smoke ジョブ生成</button>
+          <button id="docsBtn" data-i18n="docsBtn">Docs Update ジョブ生成</button>
+          <button id="repoBtn" data-i18n="repoBtn">Repo Patch ジョブ生成</button>
+        </div>
+        <div class="output-area">
+          <label>
+            <span data-i18n="jobJsonLabel">生成ジョブ JSON</span>
+            <textarea id="jobJson" readonly>{}</textarea>
+          </label>
+        </div>
+        <div class="command-block">
+          <span data-i18n="copyCommandLabel">次に実行するコマンド</span>
+          <code id="copyCommand">node scripts/run-job.js --job &lt;job-json-file&gt; --role operator</code>
+        </div>
+      </section>
+      <section class="panel" id="intakePanel">
+        <h2 data-i18n="intakeTitle">Run Result Intake</h2>
+        <p data-i18n="intakeDescription">
+          `.ai-runs/<run_id>/run.json`（必須）と `audit.jsonl`（任意）を貼り付けて Parse を押すと、Gate / Triage をブラウザで確認できます。
+        </p>
+        <label>
+          <span data-i18n="runJsonLabel">run.json を貼り付け</span>
+          <textarea
+            id="runJsonInput"
+            data-i18n-placeholder="runJsonPlaceholder"
+            placeholder="run.json の内容を貼り付け"
+          ></textarea>
+        </label>
+        <label>
+          <span data-i18n="auditLabel">audit.jsonl を貼り付け（任意）</span>
+          <textarea
+            id="auditInput"
+            data-i18n-placeholder="auditPlaceholder"
+            placeholder="audit.jsonl を貼り付け（省略可）"
+          ></textarea>
+        </label>
+        <button id="parseBtn" data-i18n="parseBtn">Parse</button>
+        <div class="error" id="parseError"></div>
+        <div class="gate" id="gateSection" hidden>
+          <div class="gate-row">
+            <div class="gate-label" data-i18n="statusLabel">ステータス</div>
+            <div id="statusValue" class="status-badge status-ok">ok</div>
+          </div>
+          <div class="gate-row">
+            <div class="gate-label" data-i18n="summaryLabel">checks_summary (total/passed/failing)</div>
+            <div id="summaryValue">0 / 0 / 0</div>
+          </div>
+          <div class="gate-row">
+            <div class="gate-label" data-i18n="failingLabel">failing IDs</div>
+            <div id="failingValue" data-i18n="noFailing">なし</div>
+          </div>
+          <div class="gate-row">
+            <div class="gate-label" data-i18n="outputLangLabel">output_language</div>
+            <div id="outputLangValue">ja</div>
+          </div>
+          <div class="gate-row">
+            <div class="gate-label" data-i18n="auditTimelineLabel">Audit Timeline</div>
+            <div>
+              <div><strong data-i18n="auditStartLabel">RUN_START</strong>: <span id="auditStartValue" data-i18n="auditMissing">イベント無し</span></div>
+              <div><strong data-i18n="auditEndLabel">RUN_END</strong>: <span id="auditEndValue" data-i18n="auditMissing">イベント無し</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="gate-label" data-i18n="triageTitle">Triage ヒント</div>
+            <ul id="triageList">
+              <li data-i18n="hintOk">runnerResult.status=ok</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script>
+      (() => {
+        const LANGS = ['ja', 'en'];
+        const DEFAULT_REPO_INSTRUCTION =
+          'In apps/hub/static/jobs.html, add one new visible helper line in the Japanese helper text block (near the existing lines about "Offline smoke → Docs Update → Repo Patch") stating: 「絶対ルール：本番ジョブ前に offline smoke（local_stub）を必ず実行する。」 Do not add any trailing HTML comments. Keep changes minimal.';
+        const DEFAULT_OFFLINE = {
+          job_type: 'integration_hub.phase2.mcp.offline_smoke',
+          goal: 'Verify MCP runner pipeline offline (no network, no claude)',
+          inputs: {
+            message: 'Run the local MCP stub to capture handshake metadata',
+            target_path: '.ai-runs/{{run_id}}/claude_mcp_smoketest.json',
+            mcp_provider: 'local_stub',
+            timeout_ms: 5000,
+            mcp_servers: []
+          },
+          constraints: { allowed_paths: ['.ai-runs/'], max_files_changed: 1, no_destructive_ops: true },
+          acceptance_criteria: [
+            'run.json and audit.jsonl are written under .ai-runs/<run_id>/',
+            'claude_mcp_smoketest.json is produced on success'
+          ],
+          provenance: { issue: 'https://github.com/example/repo/issues/21', operator: 'operator' },
+          run_mode: 'mcp',
+          output_language: 'ja',
+          expected_artifacts: [
+            { name: 'claude_mcp_smoketest.json', description: 'Offline MCP stub handshake log' }
+          ]
+        };
+        const copy = {
+          ja: {
+            title: 'Hub Jobs Console (Fallback)',
+            subtitle:
+              'npm install 不要。Offline smoke → Docs Update → Repo Patch をここで生成し、run.json / audit.jsonl を貼り付けて Gate / Triage を確認できます。',
+            subtitleRule: '絶対ルール：本番ジョブ前に offline smoke（local_stub）を必ず実行する。',
+            languageLabel: '言語',
+            builderTitle: 'Job Builder',
+            builderDescription:
+              'まず Offline smoke を生成・保存→ run-job 実行 → 成功後に Docs Update → Repo Patch の順で進めます。',
+            operatorLabel: 'Operator',
+            issueLabel: 'Issue URL（任意）',
+            docPathLabel: 'Docs path (docs_update)',
+            docInstructionLabel: 'Instruction (docs_update)',
+            repoPathLabel: 'target_path (repo_patch)',
+            repoInstructionLabel: 'Instruction (repo_patch)',
+            offlineBtn: 'Offline Smoke ジョブ生成',
+            docsBtn: 'Docs Update ジョブ生成',
+            repoBtn: 'Repo Patch ジョブ生成',
+            jobJsonLabel: '生成ジョブ JSON',
+            copyCommandLabel: '次に実行するコマンド',
+            commandText: 'node scripts/run-job.js --job <job-json-file> --role operator',
+            intakeTitle: 'Run Result Intake',
+            intakeDescription:
+              '.ai-runs/<run_id>/run.json（必須）と audit.jsonl（任意）を貼り付け、Gate / Triage をブラウザで再現します。',
+            runJsonLabel: 'run.json を貼り付け',
+            auditLabel: 'audit.jsonl を貼り付け（任意）',
+            parseBtn: 'Parse',
+            gateTitle: 'Gate / Triage',
+            statusLabel: 'ステータス',
+            summaryLabel: 'checks_summary (total/passed/failing)',
+            failingLabel: 'failing IDs',
+            outputLangLabel: 'output_language',
+            auditTimelineLabel: 'Audit Timeline',
+            auditStartLabel: 'RUN_START',
+            auditEndLabel: 'RUN_END',
+            triageTitle: 'Triage ヒント',
+            hintErrorLine1: 'run.json.runnerResult.checks と logs を確認',
+            hintErrorLine2: 'audit.jsonl の RUN_END.checks_summary を確認',
+            hintMcp: '実行経路（spawn/exit/json parse/write）を疑う',
+            hintOk: 'runnerResult.status=ok',
+            noFailing: 'なし',
+            auditMissing: 'イベント無し',
+            parseMissingRun: 'run.json を貼り付けてから Parse を押してください。',
+            parseErrorPrefix: '解析失敗: ',
+            auditErrorPrefix: 'audit.jsonl 解析失敗: ',
+            outputLangMissing: '不明',
+            runJsonPlaceholder: 'run.json の内容を貼り付け',
+            auditPlaceholder: 'audit.jsonl の内容を貼り付け（省略可）',
+            issuePlaceholder: 'https://github.com/...',
+            docInstructionPlaceholder: '例: README に1行追加',
+            repoInstructionPlaceholder: '修正内容を一文で記述'
+          },
+          en: {
+            title: 'Hub Jobs Console (Fallback)',
+            subtitle:
+              'No npm install required. Generate Offline smoke → Docs Update → Repo Patch jobs here and inspect Gate/Triage with run.json + audit.jsonl.',
+            subtitleRule: 'Absolute rule: run offline smoke (local_stub) before any production job.',
+            languageLabel: 'Language',
+            builderTitle: 'Job Builder',
+            builderDescription:
+              'Always run Offline smoke first. After it passes, move on to Docs Update and then Repo Patch.',
+            operatorLabel: 'Operator',
+            issueLabel: 'Issue URL (optional)',
+            docPathLabel: 'Docs path (docs_update)',
+            docInstructionLabel: 'Instruction (docs_update)',
+            repoPathLabel: 'target_path (repo_patch)',
+            repoInstructionLabel: 'Instruction (repo_patch)',
+            offlineBtn: 'Generate Offline Smoke Job',
+            docsBtn: 'Generate Docs Update Job',
+            repoBtn: 'Generate Repo Patch Job',
+            jobJsonLabel: 'Generated Job JSON',
+            copyCommandLabel: 'Next command to run',
+            commandText: 'node scripts/run-job.js --job <job-json-file> --role operator',
+            intakeTitle: 'Run Result Intake',
+            intakeDescription:
+              'Paste `.ai-runs/<run_id>/run.json` (required) and `audit.jsonl` (optional) to mirror Gate / Triage in the browser.',
+            runJsonLabel: 'Paste run.json',
+            auditLabel: 'Paste audit.jsonl (optional)',
+            parseBtn: 'Parse',
+            gateTitle: 'Gate / Triage',
+            statusLabel: 'Status',
+            summaryLabel: 'checks_summary (total/passed/failing)',
+            failingLabel: 'Failing IDs',
+            outputLangLabel: 'output_language',
+            auditTimelineLabel: 'Audit Timeline',
+            auditStartLabel: 'RUN_START',
+            auditEndLabel: 'RUN_END',
+            triageTitle: 'Triage Hints',
+            hintErrorLine1: 'Review run.json.runnerResult.checks & logs',
+            hintErrorLine2: 'Review audit.jsonl RUN_END.checks_summary',
+            hintMcp: 'Suspect the execution path (spawn/exit/json parse write)',
+            hintOk: 'runnerResult.status=ok',
+            noFailing: 'none',
+            auditMissing: 'not available',
+            parseMissingRun: 'Paste run.json before pressing Parse.',
+            parseErrorPrefix: 'Parse error: ',
+            auditErrorPrefix: 'audit.jsonl parse error: ',
+            outputLangMissing: 'unknown',
+            runJsonPlaceholder: 'Paste the contents of run.json',
+            auditPlaceholder: 'Paste audit.jsonl (optional)',
+            issuePlaceholder: 'https://github.com/...',
+            docInstructionPlaceholder: 'e.g. Add one sentence in README',
+            repoInstructionPlaceholder: 'Describe the patch in one sentence'
+          }
+        };
+
+        const el = {
+          langSelect: document.getElementById('langSelect'),
+          jobJson: document.getElementById('jobJson'),
+          copyCommand: document.getElementById('copyCommand'),
+          parseError: document.getElementById('parseError'),
+          gate: document.getElementById('gateSection'),
+          statusValue: document.getElementById('statusValue'),
+          summaryValue: document.getElementById('summaryValue'),
+          failingValue: document.getElementById('failingValue'),
+          outputLangValue: document.getElementById('outputLangValue'),
+          auditStartValue: document.getElementById('auditStartValue'),
+          auditEndValue: document.getElementById('auditEndValue'),
+          triageList: document.getElementById('triageList'),
+          operatorInput: document.getElementById('operatorInput'),
+          issueInput: document.getElementById('issueInput'),
+          docPathInput: document.getElementById('docPathInput'),
+          docInstructionInput: document.getElementById('docInstructionInput'),
+          repoPathInput: document.getElementById('repoPathInput'),
+          repoInstructionInput: document.getElementById('repoInstructionInput'),
+          runJsonInput: document.getElementById('runJsonInput'),
+          auditInput: document.getElementById('auditInput'),
+          offlineBtn: document.getElementById('offlineBtn'),
+          docsBtn: document.getElementById('docsBtn'),
+          repoBtn: document.getElementById('repoBtn'),
+          parseBtn: document.getElementById('parseBtn')
+        };
+
+        el.repoInstructionInput.value = DEFAULT_REPO_INSTRUCTION;
+
+        const state = {
+          lang: 'ja',
+          offlineTemplate: null,
+          lastJobKind: null,
+          gatePayload: null
+        };
+
+        function clone(obj) {
+          return JSON.parse(JSON.stringify(obj));
+        }
+
+        function isSupportedLang(value) {
+          return LANGS.includes(value);
+        }
+
+        function resolveInitialLang() {
+          try {
+            const params = new URLSearchParams(window.location.search);
+            const lang = params.get('lang');
+            if (isSupportedLang(lang)) {
+              localStorage.setItem('hub.lang', lang);
+              return lang;
+            }
+          } catch (error) {
+            // ignore
+          }
+          try {
+            const saved = localStorage.getItem('hub.lang');
+            if (isSupportedLang(saved)) {
+              return saved;
+            }
+          } catch (error) {
+            // ignore
+          }
+          return 'ja';
+        }
+
+        function updateQueryParam(lang) {
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('lang', lang);
+            window.history.replaceState({}, '', url.toString());
+          } catch (error) {
+            // ignore
+          }
+        }
+
+        function applyTranslations(lang) {
+          const dict = copy[lang];
+          document.documentElement.lang = lang;
+          document.querySelectorAll('[data-i18n]').forEach((node) => {
+            const key = node.dataset.i18n;
+            if (dict[key]) {
+              node.textContent = dict[key];
+            }
+          });
+          document.querySelectorAll('[data-i18n-placeholder]').forEach((node) => {
+            const key = node.dataset.i18nPlaceholder;
+            if (dict[key]) {
+              node.placeholder = dict[key];
+            }
+          });
+          el.copyCommand.textContent = dict.commandText;
+        }
+
+        function setLanguage(lang) {
+          if (!isSupportedLang(lang)) {
+            return;
+          }
+          state.lang = lang;
+          el.langSelect.value = lang;
+          localStorage.setItem('hub.lang', lang);
+          updateQueryParam(lang);
+          applyTranslations(lang);
+          if (state.lastJobKind) {
+            buildJob(state.lastJobKind, false);
+          }
+          if (state.gatePayload) {
+            renderGate(state.gatePayload);
+          }
+        }
+
+        function getOperator() {
+          return el.operatorInput.value.trim() || 'operator';
+        }
+
+        function getIssue() {
+          return el.issueInput.value.trim();
+        }
+
+        function getDocPath() {
+          return el.docPathInput.value.trim() || 'docs/.selftest-doc.md';
+        }
+
+        function getDocInstruction() {
+          return el.docInstructionInput.value.trim() || 'Add selftest note';
+        }
+
+        function getRepoTarget() {
+          return el.repoPathInput.value.trim() || 'apps/hub/static/jobs.html';
+        }
+
+        function getRepoInstruction() {
+          return el.repoInstructionInput.value.trim() || DEFAULT_REPO_INSTRUCTION;
+        }
+
+        function baseOfflineTemplate() {
+          return clone(state.offlineTemplate || DEFAULT_OFFLINE);
+        }
+
+        function buildOfflineJob() {
+          const job = baseOfflineTemplate();
+          job.provenance.operator = getOperator();
+          job.provenance.issue = getIssue() || '';
+          job.output_language = state.lang;
+          return job;
+        }
+
+        function buildDocsJob() {
+          const job = {
+            job_type: 'integration_hub.phase2.docs_update',
+            goal: 'Update docs safely with minimal diff',
+            inputs: {
+              message: 'Docs update selftest',
+              target_path: '.ai-runs/{{run_id}}/docs_update_report.json',
+              doc_path: getDocPath(),
+              instruction: getDocInstruction()
+            },
+            constraints: { allowed_paths: ['docs/', '.ai-runs/'], max_files_changed: 1, no_destructive_ops: true },
+            acceptance_criteria: [
+              'Docs diff limited to docs/ with <= 1 file changed',
+              'run.json and audit.jsonl captured under .ai-runs/<run_id>/'
+            ],
+            provenance: { issue: getIssue() || '', operator: getOperator() },
+            run_mode: 'local_stub',
+            output_language: state.lang,
+            expected_artifacts: [
+              { name: 'docs_update_report.json', description: 'Docs update summary' }
+            ]
+          };
+          return job;
+        }
+
+        function deriveRepoAllowedPaths(targetPath) {
+          const segments = targetPath.split('/');
+          segments.pop();
+          const dir = segments.length ? `${segments.join('/')}/` : '';
+          const allowed = ['.ai-runs/'];
+          if (dir) {
+            allowed.unshift(dir);
+          }
+          return allowed;
+        }
+
+        function buildRepoJob() {
+          const targetPath = getRepoTarget();
+          const allowedPaths = deriveRepoAllowedPaths(targetPath);
+          const job = {
+            job_type: 'integration_hub.phase2.repo_patch',
+            goal: 'Patch Hub fallback HTML',
+            inputs: {
+              message: 'Apply repo patch instruction to jobs.html',
+              target_path: targetPath,
+              instruction: getRepoInstruction(),
+              allowed_paths: allowedPaths
+            },
+            constraints: {
+              allowed_paths: allowedPaths,
+              max_files_changed: 1,
+              no_destructive_ops: true
+            },
+            acceptance_criteria: [
+              'jobs.html is modified in exactly one location.',
+              'run.json records repo_patch result.'
+            ],
+            provenance: { issue: getIssue() || '', operator: getOperator() },
+            run_mode: 'local_stub',
+            output_language: state.lang,
+            expected_artifacts: [
+              { name: 'repo_patch_report.json', description: 'Repo patch summary' }
+            ]
+          };
+          return job;
+        }
+
+        const builders = {
+          offline: buildOfflineJob,
+          docs: buildDocsJob,
+          repo: buildRepoJob
+        };
+
+        function renderJob(job) {
+          el.jobJson.value = JSON.stringify(job, null, 2);
+        }
+
+        function buildJob(kind, track = true) {
+          const builder = builders[kind];
+          if (!builder) {
+            return;
+          }
+          const job = builder();
+          renderJob(job);
+          if (track) {
+            state.lastJobKind = kind;
+          }
+        }
+
+        function parseAudit(auditText, langDict) {
+          if (!auditText.trim()) {
+            return { start: null, end: null, error: null };
+          }
+          const lines = auditText.split('\n').map((line) => line.trim()).filter(Boolean);
+          let start = null;
+          let end = null;
+          for (const line of lines) {
+            try {
+              const event = JSON.parse(line);
+              if (event.event === 'RUN_START' && !start) {
+                start = event.ts || event.timestamp || null;
+              }
+              if (event.event === 'RUN_END') {
+                end = event.ts || event.timestamp || null;
+              }
+            } catch (error) {
+              return { start: null, end: null, error: `${langDict.auditErrorPrefix}${error.message}` };
+            }
+          }
+          return { start, end, error: null };
+        }
+
+        function renderGate(payload) {
+          const langDict = copy[state.lang];
+          const { run, audit } = payload;
+          const runnerResult = run.runnerResult || {};
+          const summary = runnerResult.checks_summary || { total: 0, passed: 0, failing: [] };
+          const failing = Array.isArray(summary.failing) ? summary.failing : [];
+          const jobLang = (run.job && run.job.output_language) || langDict.outputLangMissing;
+          el.statusValue.textContent = runnerResult.status || 'unknown';
+          el.statusValue.classList.remove('status-ok', 'status-error');
+          el.statusValue.classList.add(runnerResult.status === 'ok' ? 'status-ok' : 'status-error');
+          el.summaryValue.textContent = `${summary.total || 0} / ${summary.passed || 0} / ${failing.length}`;
+          el.failingValue.textContent = failing.length ? failing.join(', ') : langDict.noFailing;
+          el.outputLangValue.textContent = jobLang;
+          el.auditStartValue.textContent = audit.start || langDict.auditMissing;
+          el.auditEndValue.textContent = audit.end || langDict.auditMissing;
+
+          const hints = [];
+          if (runnerResult.status !== 'ok') {
+            hints.push(langDict.hintErrorLine1);
+            hints.push(langDict.hintErrorLine2);
+          }
+          const checks = Array.isArray(runnerResult.checks) ? runnerResult.checks : [];
+          if (checks.some((c) => c && c.id === 'mcp_exec' && c.ok === false)) {
+            hints.push(langDict.hintMcp);
+          }
+          if (!hints.length) {
+            hints.push(langDict.hintOk);
+          }
+          el.triageList.innerHTML = '';
+          hints.forEach((hint) => {
+            const li = document.createElement('li');
+            li.textContent = hint;
+            el.triageList.appendChild(li);
+          });
+          el.gate.hidden = false;
+        }
+
+        function parseGate() {
+          const langDict = copy[state.lang];
+          const runText = el.runJsonInput.value.trim();
+          if (!runText) {
+            el.parseError.textContent = langDict.parseMissingRun;
+            el.gate.hidden = true;
+            state.gatePayload = null;
+            return;
+          }
+          try {
+            const run = JSON.parse(runText);
+            const audit = parseAudit(el.auditInput.value || '', langDict);
+            if (audit.error) {
+              el.parseError.textContent = audit.error;
+              el.gate.hidden = true;
+              state.gatePayload = null;
+              return;
+            }
+            state.gatePayload = { run, audit };
+            el.parseError.textContent = '';
+            renderGate(state.gatePayload);
+          } catch (error) {
+            el.parseError.textContent = `${langDict.parseErrorPrefix}${error.message}`;
+            el.gate.hidden = true;
+            state.gatePayload = null;
+          }
+        }
+
+        function loadOfflineFixture() {
+          return fetch('/offline-job.fixture.json')
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+              if (data) {
+                state.offlineTemplate = data;
+              }
+            })
+            .catch(() => {
+              // ignore, fallback to default template
+            });
+        }
+
+        function init() {
+          state.lang = resolveInitialLang();
+          applyTranslations(state.lang);
+          el.langSelect.value = state.lang;
+          el.langSelect.addEventListener('change', (event) => setLanguage(event.target.value));
+          el.offlineBtn.addEventListener('click', () => buildJob('offline', true));
+          el.docsBtn.addEventListener('click', () => buildJob('docs', true));
+          el.repoBtn.addEventListener('click', () => buildJob('repo', true));
+          el.parseBtn.addEventListener('click', parseGate);
+          loadOfflineFixture().finally(() => {
+            state.lastJobKind = 'offline';
+            buildJob('offline', true);
+          });
+        }
+
+        init();
+      })();
+    </script>
+  </body>
+</html>
