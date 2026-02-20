@@ -160,6 +160,9 @@ try {
     "scripts/sample-job.mcp.offline.smoke.json",
     "scripts/sample-job.docs.update.json",
     "scripts/sample-job.repo_patch.hub-static.json",
+    "scripts/sample-job.spawn_smoke.json",
+    "scripts/sample-job.diagnostics.json",
+    "scripts/sample-job.openai_exec_smoke.json",
     "docs/.selftest-doc.md",
     "apps/hub/static/offline-job.fixture.json",
   ];

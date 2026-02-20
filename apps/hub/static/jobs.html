@@ -384,6 +384,7 @@
           <button id="repoBtn" data-i18n="repoBtn">Repo Patch ジョブ生成</button>
           <button id="diagBtn" data-i18n="diagBtn">Diagnostics ジョブ生成</button>
           <button id="spawnBtn" data-i18n="spawnBtn">Spawn Smoke ジョブ生成</button>
+          <button id="openaiSpawnBtn" data-i18n="openaiSpawnBtn">OpenAI Exec Smoke ジョブ生成</button>
         </div>
         <div class="output-area">
           <label>
@@ -450,6 +451,7 @@
           </div>
           <div class="result-section" id="warningsSection" hidden>
             <h3 data-i18n="warningsSectionTitle">Known Warnings</h3>
+            <p class="helper-line" data-i18n="warningsHelper">"Shell snapshot validation failed" は exit=0 の場合は Known Warning として無視して構いません（stderr 全文は spawn_stderr.txt に保存されます）。</p>
             <ul id="warningsList" class="warning-list"></ul>
             <div id="warningsEmpty" class="placeholder" data-i18n="warningsEmpty">既知の警告はありません</div>
           </div>
@@ -519,6 +521,7 @@
             repoBtn: 'Repo Patch ジョブ生成',
             diagBtn: 'Diagnostics ジョブ生成',
             spawnBtn: 'Spawn Smoke ジョブ生成',
+            openaiSpawnBtn: 'OpenAI Exec Smoke ジョブ生成',
             jobJsonLabel: '生成ジョブ JSON',
             copyCommandLabel: '次に実行するコマンド',
             commandText: 'node scripts/run-job.js --job <job-json-file> --role operator',
@@ -540,6 +543,8 @@
             checksEmpty: 'チェックは記録されていません',
             logsEmpty: 'ログ出力はありません',
             warningsEmpty: '既知の警告はありません',
+            warningsHelper:
+              '"Shell snapshot validation failed" は exit=0 なら Known Warning として無視して構いません（stderr 全文は spawn_stderr.txt に保存されます）。',
             auditEmpty: 'audit.jsonl は未入力です',
             auditEventsLabel: '解析済み行',
             auditErrorsLabel: 'エラー',
@@ -579,6 +584,7 @@
             repoBtn: 'Generate Repo Patch Job',
             diagBtn: 'Generate Diagnostics Job',
             spawnBtn: 'Generate Spawn Smoke Job',
+            openaiSpawnBtn: 'Generate OpenAI Exec Smoke Job',
             jobJsonLabel: 'Generated Job JSON',
             copyCommandLabel: 'Next command to run',
             commandText: 'node scripts/run-job.js --job <job-json-file> --role operator',
@@ -600,6 +606,8 @@
             checksEmpty: 'No checks recorded.',
             logsEmpty: 'No logs captured.',
             warningsEmpty: 'No known warnings.',
+            warningsHelper:
+              '"Shell snapshot validation failed" is treated as a Known Warning when exit=0 (full stderr is preserved in spawn_stderr.txt).',
             auditEmpty: 'audit.jsonl not provided.',
             auditEventsLabel: 'Parsed lines',
             auditErrorsLabel: 'Errors',
@@ -653,6 +661,7 @@
           repoInstructionInput: document.getElementById('repoInstructionInput'),
           diagBtn: document.getElementById('diagBtn'),
           spawnBtn: document.getElementById('spawnBtn'),
+          openaiSpawnBtn: document.getElementById('openaiSpawnBtn'),
           runJsonInput: document.getElementById('runJsonInput'),
           auditInput: document.getElementById('auditInput'),
           offlineBtn: document.getElementById('offlineBtn'),
@@ -905,12 +914,40 @@
           return job;
         }
 
+        function buildOpenaiExecSmokeJob() {
+          const job = {
+            job_type: 'integration_hub.phase2.mcp.openai_exec_smoke',
+            goal: 'OpenAI Codex exec smoke via spawn (non-interactive)',
+            inputs: {
+              message: 'openai exec smoke',
+              target_path: '.ai-runs/{{run_id}}/openai_exec_smoke_report.json',
+              mcp_provider: 'spawn',
+              mcp_command: 'npx',
+              mcp_args: ['--yes', 'codex', 'exec', 'echo OK']
+            },
+            constraints: {
+              allowed_paths: ['.ai-runs/'],
+              max_files_changed: 0,
+              no_destructive_ops: true
+            },
+            acceptance_criteria: ['spawn exec returns exit=0', 'stdout contains OK'],
+            provenance: { issue: getIssue() || '', operator: getOperator() },
+            run_mode: 'mcp',
+            output_language: state.lang,
+            expected_artifacts: [
+              { name: 'openai_exec_smoke_report.json', description: 'openai exec smoke summary' }
+            ]
+          };
+          return job;
+        }
+
         const builders = {
           offline: buildOfflineJob,
           docs: buildDocsJob,
           repo: buildRepoJob,
           diag: buildDiagnosticsJob,
-          spawn: buildSpawnSmokeJob
+          spawn: buildSpawnSmokeJob,
+          openai_spawn: buildOpenaiExecSmokeJob
         };
 
         function renderJob(job) {
@@ -1145,7 +1182,7 @@
               '次に進む場合：local_stub 以外（例：spawn/claude-cli等）の実行手段を有効化する設計に移る想定です。';
           }
           if (hasCodexWarning && okStatus && jobType.includes('openai')) {
-            const warningNote = 'Shell snapshot validation failed は exit=0 の場合は無視して構いません。';
+            const warningNote = 'Shell snapshot validation failed は exit=0 の場合は無視して構いません（spawn_stderr.txt を参照できます）。';
             note = note ? `${note} ${warningNote}` : warningNote;
           }
           return { message, note, failingReasons };
@@ -1303,6 +1340,7 @@
           el.repoBtn.addEventListener('click', () => buildJob('repo', true));
           el.diagBtn.addEventListener('click', () => buildJob('diag', true));
           el.spawnBtn.addEventListener('click', () => buildJob('spawn', true));
+          el.openaiSpawnBtn.addEventListener('click', () => buildJob('openai_spawn', true));
           el.parseBtn.addEventListener('click', handleParse);
           loadOfflineFixture().finally(() => {
             state.lastJobKind = 'offline';

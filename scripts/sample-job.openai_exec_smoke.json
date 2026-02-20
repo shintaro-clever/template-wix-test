@@ -1,0 +1,26 @@
+{
+  "job_type": "integration_hub.phase2.mcp.openai_exec_smoke",
+  "goal": "OpenAI Codex exec smoke via spawn (non-interactive)",
+  "run_mode": "mcp",
+  "inputs": {
+    "message": "openai exec smoke",
+    "target_path": ".ai-runs/{{run_id}}/openai_exec_smoke_report.json",
+    "mcp_provider": "spawn",
+    "mcp_command": "npx",
+    "mcp_args": ["--yes", "codex", "exec", "echo OK"]
+  },
+  "constraints": {
+    "allowed_paths": [".ai-runs/"],
+    "max_files_changed": 0,
+    "no_destructive_ops": true
+  },
+  "acceptance_criteria": [
+    "spawn exec returns exit=0",
+    "stdout contains OK"
+  ],
+  "provenance": { "issue": "", "operator": "operator" },
+  "output_language": "ja",
+  "expected_artifacts": [
+    { "name": "openai_exec_smoke_report.json", "description": "openai exec smoke summary" }
+  ]
+}
