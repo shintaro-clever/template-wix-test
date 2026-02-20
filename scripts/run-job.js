@@ -325,14 +325,18 @@ async function executeDiagnosticsJob(jobPayload) {
       }
     });
 
-    const envTargets = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY'];
+    const envTargets = [
+      { name: 'OPENAI_API_KEY', importance: 'required' },
+      { name: 'ANTHROPIC_API_KEY', importance: 'optional' }
+    ];
     const envReport = {};
-    envTargets.forEach((key) => {
+    envTargets.forEach((entry) => {
+      const key = entry.name;
       const masked = maskEnvValue(process.env[key]);
       envReport[key] = masked;
       logs.push(`環境変数 ${key}: ${masked}`);
       const ok = masked === 'SET';
-      pushCheck(`env_${key.toLowerCase()}`, ok, `環境変数 ${key}: ${masked}`, 'required');
+      pushCheck(`env_${key.toLowerCase()}`, ok, `環境変数 ${key}: ${masked}`, entry.importance);
     });
 
     const artifactPath = resolveTargetPath(job.inputs.target_path, runId);
