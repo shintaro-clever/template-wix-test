@@ -13,8 +13,8 @@
     "no_destructive_ops": true
   },
   "acceptance_criteria": [
-    "jobs.html is modified in exactly one location.",
-    "run.json records repo_patch result."
+    "jobs.html remains untouched (noop) unless allow_html_comment=true.",
+    "run.json records the repo_patch result (diff_summary shows noop text by default)."
   ],
   "provenance": {
     "issue": "https://github.com/example/repo/issues/21",
