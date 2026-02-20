@@ -88,3 +88,55 @@ npm test
 ./bin/dev
 # open:
 # http://127.0.0.1:3000/jobs
+
+## Phase1 Integration Hub Stub（検証器：/jobs）
+
+`/jobs` は本体UIではなく、Phase2 の「ジョブ生成→実行→結果取り込み→次アクション」を回すための **検証用UI**です。
+
+### Hub Jobs 最短ループ（手動確認フロー）
+
+0. （任意）Diagnostics: `/jobs` で Diagnostics ジョブを生成・保存し、実行  
+1. Offline smoke  
+2. Spawn smoke  
+3. OpenAI exec smoke  
+4. Docs update  
+5. Repo patch（noop）
+
+```bash
+# 1) Offline smoke
+node scripts/run-job.js --job job.offline_smoke.json --role operator
+
+# 2) Spawn smoke
+node scripts/run-job.js --job job.spawn_smoke.json --role operator
+
+# 3) OpenAI exec smoke
+# OPENAI_API_KEY を設定してから実行
+node scripts/run-job.js --job job.openai_exec_smoke.json --role operator
+
+# 4) Docs update
+node scripts/run-job.js --job job.docs_update.json --role operator
+
+# 5) Repo patch（noop）
+node scripts/run-job.js --job job.repo_patch.json --role operator
+
+最新 run_id:
+
+RID="$(ls -1 .ai-runs | tail -n 1)"
+
+stderr に既知の警告が含まれる場合があるため、.ai-runs/<run_id>/ 配下の成果物で原文を確認してから判断してください。
+
+
+---
+
+## これでスクショの問題は解消します
+- コマンドが横長の灰色ラベル（インライン）にならず、縦に整列したコードブロックになる
+- 視認性が一気に戻る
+
+---
+
+## 追加で1点（任意だけど推奨）
+同じ理由で `Connections 設定UI（暫定）` の `node server.js` とURLも、インラインではなく短いコードブロックにすると見やすいです。
+
+---
+
+この置換をGitHubのREADME editで入れた後、同じ箇所のスクショをもう一回貼ってください。表示が整ったことを確認したら、次は **/connectors（一覧）** のREADME導線（1〜2行）だけ追加します。
