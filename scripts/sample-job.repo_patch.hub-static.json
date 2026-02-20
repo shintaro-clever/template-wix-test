@@ -13,8 +13,9 @@
     "no_destructive_ops": true
   },
   "acceptance_criteria": [
-    "jobs.html remains untouched (noop) unless allow_html_comment=true.",
-    "run.json records the repo_patch result (diff_summary shows noop text by default)."
+    "run.json records repo_patch result.",
+    "When noop mode is active (default), the target file is NOT modified.",
+    "diff_summary and checks[0].reason reflect noop when no file changed."
   ],
   "provenance": {
     "issue": "https://github.com/example/repo/issues/21",
