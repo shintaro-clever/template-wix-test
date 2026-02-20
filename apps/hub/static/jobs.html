@@ -118,6 +118,11 @@
         border-radius: 6px;
         color: #222;
       }
+      .helper-line {
+        margin: -8px 0 12px;
+        font-size: 13px;
+        color: #666;
+      }
       .error {
         color: #c0392b;
         font-weight: 600;
@@ -247,6 +252,22 @@
         color: #a62017;
         font-weight: 600;
         font-size: 13px;
+      }
+      .warning-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .warning-item {
+        background: #fff4e5;
+        border: 1px solid #ffc27a;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-size: 14px;
+        color: #7c4b14;
       }
       .placeholder {
         font-size: 14px;
@@ -380,6 +401,7 @@
         <p data-i18n="intakeDescription">
           `.ai-runs/<run_id>/run.json`（必須）と `audit.jsonl`（任意）を貼り付けて Parse を押すと、Gate / Triage をブラウザで確認できます。
         </p>
+        <p class="helper-line" data-i18n="runIdHelper">`<run_id>` は `.ai-runs/` 配下のフォルダ名です（例: mluqp0e9-0f34e1）。</p>
         <label>
           <span data-i18n="runJsonLabel">run.json を貼り付け</span>
           <textarea
@@ -425,6 +447,11 @@
             <h3 data-i18n="logsSectionTitle">Logs</h3>
             <ul id="logsList" class="log-list"></ul>
             <div id="logsEmpty" class="placeholder" data-i18n="logsEmpty">ログはありません</div>
+          </div>
+          <div class="result-section" id="warningsSection" hidden>
+            <h3 data-i18n="warningsSectionTitle">Known Warnings</h3>
+            <ul id="warningsList" class="warning-list"></ul>
+            <div id="warningsEmpty" class="placeholder" data-i18n="warningsEmpty">既知の警告はありません</div>
           </div>
           <div class="result-section" id="auditSection">
             <h3 data-i18n="auditSectionTitle">Audit Parse Result</h3>
@@ -501,15 +528,18 @@
             runJsonLabel: 'run.json を貼り付け',
             auditLabel: 'audit.jsonl を貼り付け（任意）',
             parseBtn: 'Parse',
+            runIdHelper: '`<run_id>` は `.ai-runs/` 配下のフォルダ名です（例: mluqp0e9-0f34e1）。',
             summarySectionTitle: 'Summary',
             summaryStatusLabel: 'Status',
             summaryJobTypeLabel: 'Job Type',
             summaryGoalLabel: 'Goal',
             checksSectionTitle: 'Checks',
             logsSectionTitle: 'Logs',
+            warningsSectionTitle: 'Known Warnings',
             auditSectionTitle: 'Audit解析結果',
             checksEmpty: 'チェックは記録されていません',
             logsEmpty: 'ログ出力はありません',
+            warningsEmpty: '既知の警告はありません',
             auditEmpty: 'audit.jsonl は未入力です',
             auditEventsLabel: '解析済み行',
             auditErrorsLabel: 'エラー',
@@ -558,15 +588,18 @@
             runJsonLabel: 'Paste run.json',
             auditLabel: 'Paste audit.jsonl (optional)',
             parseBtn: 'Parse',
+            runIdHelper: '`<run_id>` is the folder name under `.ai-runs/` (e.g., mluqp0e9-0f34e1).',
             summarySectionTitle: 'Summary',
             summaryStatusLabel: 'Status',
             summaryJobTypeLabel: 'Job Type',
             summaryGoalLabel: 'Goal',
             checksSectionTitle: 'Checks',
             logsSectionTitle: 'Logs',
+            warningsSectionTitle: 'Known Warnings',
             auditSectionTitle: 'Audit parse result',
             checksEmpty: 'No checks recorded.',
             logsEmpty: 'No logs captured.',
+            warningsEmpty: 'No known warnings.',
             auditEmpty: 'audit.jsonl not provided.',
             auditEventsLabel: 'Parsed lines',
             auditErrorsLabel: 'Errors',
@@ -601,6 +634,9 @@
           checksEmpty: document.getElementById('checksEmpty'),
           logsList: document.getElementById('logsList'),
           logsEmpty: document.getElementById('logsEmpty'),
+          warningsSection: document.getElementById('warningsSection'),
+          warningsList: document.getElementById('warningsList'),
+          warningsEmpty: document.getElementById('warningsEmpty'),
           auditEvents: document.getElementById('auditEvents'),
           auditEmpty: document.getElementById('auditEmpty'),
           auditErrors: document.getElementById('auditErrors'),
@@ -976,6 +1012,26 @@
           });
         }
 
+        function renderKnownWarnings(warnings, langDict) {
+          el.warningsList.innerHTML = '';
+          if (!Array.isArray(warnings) || !warnings.length) {
+            el.warningsSection.hidden = true;
+            el.warningsEmpty.hidden = false;
+            return;
+          }
+          el.warningsSection.hidden = false;
+          el.warningsEmpty.hidden = true;
+          warnings.forEach((warning) => {
+            if (!warning) {
+              return;
+            }
+            const li = document.createElement('li');
+            li.className = 'warning-item';
+            li.textContent = warning.message || warning.id || 'warning';
+            el.warningsList.appendChild(li);
+          });
+        }
+
         function renderAudit(auditResult, langDict) {
           el.auditEvents.innerHTML = '';
           el.auditErrors.innerHTML = '';
@@ -1036,6 +1092,9 @@
             'run.json と audit.jsonl を確認し、checks の failing reason を貼って次の修正ジョブを作成してください。';
           let note = '';
 
+          const knownWarnings = Array.isArray(runnerResult.known_warnings)
+            ? runnerResult.known_warnings
+            : [];
           const mcpCheck = findCheckById(checks, 'mcp_exec');
           const docsCheck = findCheckById(checks, 'docs_update');
           const repoCheck = findCheckById(checks, 'repo_patch');
@@ -1067,6 +1126,9 @@
             }
             return { message, note, failingReasons };
           }
+          const hasCodexWarning = knownWarnings.some(
+            (warning) => warning && warning.id === 'codex_shell_snapshot_validation_failed'
+          );
 
           if (
             jobType === 'integration_hub.phase2.mcp.offline_smoke' &&
@@ -1081,6 +1143,10 @@
             message = '絶対ルール：本番ジョブ前に offline_smoke（local_stub）を必ず実行する。';
             note =
               '次に進む場合：local_stub 以外（例：spawn/claude-cli等）の実行手段を有効化する設計に移る想定です。';
+          }
+          if (hasCodexWarning && okStatus && jobType.includes('openai')) {
+            const warningNote = 'Shell snapshot validation failed は exit=0 の場合は無視して構いません。';
+            note = note ? `${note} ${warningNote}` : warningNote;
           }
           return { message, note, failingReasons };
         }
@@ -1165,6 +1231,8 @@
             (Array.isArray(run.logs) ? run.logs : []);
           renderChecks(checks, langDict);
           renderLogs(logs, langDict);
+          const knownWarnings = (runnerResult && runnerResult.known_warnings) || [];
+          renderKnownWarnings(knownWarnings, langDict);
           renderAudit(payload.audit, langDict);
           renderNextAction(run);
           el.resultsSection.hidden = false;
@@ -1178,6 +1246,9 @@
           el.auditErrors.innerHTML = '';
           el.checksEmpty.hidden = true;
           el.logsEmpty.hidden = true;
+          el.warningsList.innerHTML = '';
+          el.warningsSection.hidden = true;
+          el.warningsEmpty.hidden = true;
           el.auditEmpty.hidden = true;
           state.intakePayload = null;
           el.nextActionSection.hidden = true;

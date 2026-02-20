@@ -10,6 +10,7 @@ const SCHEMA_VERSION = 'phase2/v1';
 const ALLOWED_SPAWN_COMMANDS = new Set(['node', 'npx', 'git', 'php', 'codex']);
 const SPAWN_ENV_ALLOWLIST = ['PATH', 'HOME', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'];
 const MAX_SPAWN_CAPTURE = 4000;
+const CODEX_SHELL_WARNING = 'Shell snapshot validation failed';
 
 function parseArgs(argv) {
   const args = { role: 'operator' };
@@ -273,6 +274,17 @@ function maskEnvValue(value) {
   return 'SET';
 }
 
+function exitWithJobError(checkId, reason, logMessages) {
+  const logsArray = Array.isArray(logMessages) ? logMessages : logMessages ? [logMessages] : [];
+  const result = {
+    status: 'error',
+    checks: [{ id: checkId, ok: false, reason }],
+    logs: logsArray
+  };
+  console.log(JSON.stringify(result));
+  process.exit(1);
+}
+
 function buildSpawnEnv() {
   const env = {};
   SPAWN_ENV_ALLOWLIST.forEach((key) => {
@@ -478,12 +490,26 @@ async function executeSpawnJob(jobPayload) {
       }
       return text.split('\n').slice(0, 3).join(' | ');
     };
+    const knownWarnings = [];
+    let stderrPreview = preview(stderr);
+    const stdoutPreview = preview(stdout);
+    if (stderr.includes(CODEX_SHELL_WARNING)) {
+      const warningMessage = 'Shell snapshot validation failed (exec may still succeed)';
+      knownWarnings.push({
+        id: 'codex_shell_snapshot_validation_failed',
+        message: warningMessage
+      });
+      stderrPreview = `[KNOWN WARNING] ${warningMessage}`;
+    }
     const logs = [
       `spawn command=${command}`,
       `spawn args=${JSON.stringify(args)}`,
-      `stdout preview: ${preview(stdout)}`,
-      `stderr preview: ${preview(stderr)}`
+      `stdout preview: ${stdoutPreview}`,
+      `stderr preview: ${stderrPreview}`
     ];
+    knownWarnings.forEach((warning) => {
+      logs.push(`known_warning=${warning.id}`);
+    });
     const checks = [{ id: 'spawn_exec', ok: code === 0, reason: `exit=${code}` }];
     const result = {
       status: code === 0 ? 'ok' : 'error',
@@ -494,7 +520,8 @@ async function executeSpawnJob(jobPayload) {
       ],
       diff_summary: `spawn exit=${code}`,
       checks,
-      logs
+      logs,
+      known_warnings: knownWarnings
     };
     return finalizeRun(runPaths, job, result, createdAt);
   } catch (error) {
@@ -551,7 +578,30 @@ async function main() {
   }
 
   const jobPath = path.resolve(job);
-  const jobPayload = JSON.parse(fs.readFileSync(jobPath, 'utf8'));
+  let raw;
+  try {
+    raw = fs.readFileSync(jobPath, 'utf8');
+  } catch (error) {
+    exitWithJobError('job_json_parse', 'run.json のJSON形式が正しくありません。', [
+      `job file read failed: ${error.message}`
+    ]);
+    return;
+  }
+  let jobPayload;
+  try {
+    jobPayload = JSON.parse(raw);
+  } catch (error) {
+    exitWithJobError('job_json_parse', 'run.json のJSON形式が正しくありません。', [
+      `job JSON parse failed: ${error.message}`
+    ]);
+    return;
+  }
+  const validation = validateJob(jobPayload);
+  if (!validation.ok) {
+    const reason = `ジョブ定義エラー: ${validation.errors[0] || '不明なエラー'}`;
+    exitWithJobError('job_validation', reason, validation.errors);
+    return;
+  }
   const jobType = jobPayload.job_type;
   let result;
   if (jobType === 'integration_hub.phase2.docs_update') {
