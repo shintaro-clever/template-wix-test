@@ -13,8 +13,11 @@ log() {
 log "Running npm test..."
 npm test
 
-log "Starting server at http://127.0.0.1:3000/jobs"
-log "Example verification: curl -I http://127.0.0.1:3000/jobs"
+HOST="${HOST:-127.0.0.1}"
+PORT="${PORT:-3100}"
+
+log "Starting server at http://${HOST}:${PORT}/jobs"
+log "Example verification: curl -I http://${HOST}:${PORT}/jobs"
 
 FIFO_PATH="$(mktemp -u)"
 mkfifo "$FIFO_PATH"
@@ -30,7 +33,7 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
-node server.js > "$FIFO_PATH" 2>&1 &
+HOST="$HOST" PORT="$PORT" node server.js > "$FIFO_PATH" 2>&1 &
 SERVER_PID=$!
 
 while IFS= read -r line || [[ -n "$line" ]]; do

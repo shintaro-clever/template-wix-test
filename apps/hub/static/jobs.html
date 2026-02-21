@@ -379,12 +379,12 @@
           />
         </label>
         <div class="button-row">
-          <button id="offlineBtn" data-i18n="offlineBtn">Offline Smoke ジョブ生成</button>
-          <button id="docsBtn" data-i18n="docsBtn">Docs Update ジョブ生成</button>
-          <button id="repoBtn" data-i18n="repoBtn">Repo Patch ジョブ生成</button>
           <button id="diagBtn" data-i18n="diagBtn">Diagnostics ジョブ生成</button>
+          <button id="offlineBtn" data-i18n="offlineBtn">Offline Smoke ジョブ生成</button>
           <button id="spawnBtn" data-i18n="spawnBtn">Spawn Smoke ジョブ生成</button>
           <button id="openaiSpawnBtn" data-i18n="openaiSpawnBtn">OpenAI Exec Smoke ジョブ生成</button>
+          <button id="docsBtn" data-i18n="docsBtn">Docs Update ジョブ生成</button>
+          <button id="repoBtn" data-i18n="repoBtn">Repo Patch ジョブ生成</button>
         </div>
         <div class="output-area">
           <label>
@@ -399,10 +399,8 @@
       </section>
       <section class="panel" id="intakePanel">
         <h2 data-i18n="intakeTitle">Run Result Intake</h2>
-        <p data-i18n="intakeDescription">
-          `.ai-runs/<run_id>/run.json`（必須）と `audit.jsonl`（任意）を貼り付けて Parse を押すと、Gate / Triage をブラウザで確認できます。
-        </p>
-        <p class="helper-line" data-i18n="runIdHelper">`<run_id>` は `.ai-runs/` 配下のフォルダ名です（例: mluqp0e9-0f34e1）。</p>
+        <p data-i18n="intakeDescription">`.ai-runs/<run_id>/run.json`（必須）と `audit.jsonl`（任意）を貼り付けて Parse を押すと、Gate / Triage をブラウザで確認できます。推奨入力は run.json（必須）と audit.jsonl（任意）の組み合わせです。</p>
+        <p class="helper-line" data-i18n="runIdHelper">`<run_id>` は `.ai-runs/` 配下のフォルダ名です。最新 run_id は `RID="$(ls -1 .ai-runs | tail -n 1)"` などで取得できます。</p>
         <label>
           <span data-i18n="runJsonLabel">run.json を貼り付け</span>
           <textarea
@@ -508,8 +506,7 @@
             subtitleRule: '絶対ルール：本番ジョブ前に offline smoke（local_stub）を必ず実行する。',
             languageLabel: '言語',
             builderTitle: 'Job Builder',
-            builderDescription:
-              'Diagnostics で環境を確認 → Offline smoke を生成・保存 → 成功後に Docs Update → Repo Patch の順で進めます。必要に応じて Spawn smoke で shell なしコマンドの疎通も確認できます。',
+            builderDescription: 'Diagnostics（任意）→ Offline smoke → Spawn smoke → OpenAI exec smoke → Docs Update → Repo Patch の順で一本道に進みます。',
             operatorLabel: 'Operator',
             issueLabel: 'Issue URL（任意）',
             docPathLabel: 'Docs path (docs_update)',
@@ -526,12 +523,11 @@
             copyCommandLabel: '次に実行するコマンド',
             commandText: 'node scripts/run-job.js --job <job-json-file> --role operator',
             intakeTitle: 'Run Result Intake',
-            intakeDescription:
-              '.ai-runs/<run_id>/run.json（必須）と audit.jsonl（任意）を貼り付け、Gate / Triage をブラウザで再現します。',
+            intakeDescription: '.ai-runs/<run_id>/run.json（必須）と audit.jsonl（任意）を貼り付け、Gate / Triage をブラウザで再現します。推奨入力は run.json（必須）と audit.jsonl（任意）の組み合わせです。',
             runJsonLabel: 'run.json を貼り付け',
             auditLabel: 'audit.jsonl を貼り付け（任意）',
             parseBtn: 'Parse',
-            runIdHelper: '`<run_id>` は `.ai-runs/` 配下のフォルダ名です（例: mluqp0e9-0f34e1）。',
+            runIdHelper: '`<run_id>` は `.ai-runs/` 配下のフォルダ名です。最新 run_id は `RID="$(ls -1 .ai-runs | tail -n 1)"` などで取得できます。',
             summarySectionTitle: 'Summary',
             summaryStatusLabel: 'Status',
             summaryJobTypeLabel: 'Job Type',
@@ -571,8 +567,7 @@
             subtitleRule: 'Absolute rule: run offline smoke (local_stub) before any production job.',
             languageLabel: 'Language',
             builderTitle: 'Job Builder',
-            builderDescription:
-              'Start with Diagnostics → run Offline smoke → once it passes, continue with Docs Update then Repo Patch. Use Spawn smoke when you need a shell-less command smoke test.',
+            builderDescription: 'Follow the single track: Diagnostics (optional) → Offline smoke → Spawn smoke → OpenAI exec smoke → Docs Update → Repo Patch.',
             operatorLabel: 'Operator',
             issueLabel: 'Issue URL (optional)',
             docPathLabel: 'Docs path (docs_update)',
@@ -589,12 +584,11 @@
             copyCommandLabel: 'Next command to run',
             commandText: 'node scripts/run-job.js --job <job-json-file> --role operator',
             intakeTitle: 'Run Result Intake',
-            intakeDescription:
-              'Paste `.ai-runs/<run_id>/run.json` (required) and `audit.jsonl` (optional) to mirror Gate / Triage in the browser.',
+            intakeDescription: 'Paste `.ai-runs/<run_id>/run.json` (required) and `audit.jsonl` (optional) to mirror Gate / Triage in the browser. Recommended input: run.json (required) plus audit.jsonl (optional).',
             runJsonLabel: 'Paste run.json',
             auditLabel: 'Paste audit.jsonl (optional)',
             parseBtn: 'Parse',
-            runIdHelper: '`<run_id>` is the folder name under `.ai-runs/` (e.g., mluqp0e9-0f34e1).',
+            runIdHelper: '`<run_id>` is the folder name under `.ai-runs/`. Fetch the latest run_id with `RID="$(ls -1 .ai-runs | tail -n 1)"` (example).',
             summarySectionTitle: 'Summary',
             summaryStatusLabel: 'Status',
             summaryJobTypeLabel: 'Job Type',
@@ -1125,8 +1119,7 @@
             .map((check) => check.reason.trim())
             .filter(Boolean);
 
-          let message =
-            'run.json と audit.jsonl を確認し、checks の failing reason を貼って次の修正ジョブを作成してください。';
+          let message = 'run.json/audit.jsonl で failing reason を確認し、次の修正ジョブを作成してください。';
           let note = '';
 
           const knownWarnings = Array.isArray(runnerResult.known_warnings)
@@ -1155,11 +1148,13 @@
 
           if (jobType === 'integration_hub.phase2.diagnostics') {
             if (diagMessages.length) {
-              message = `${diagMessages.join(' ')} ${diagSuffix}`.trim();
+              message = diagMessages.join(' / ');
+              note = diagSuffix;
             } else if (okStatus) {
-              message = '環境は概ねOKです。次は spawn 実行（ホワイトリスト付き）か、外部LLMジョブの有効化に進めます。';
+              message = 'Diagnostics OK。次は offline_smoke を実行してください。';
             } else {
-              message = `環境設定を再確認してください。${diagSuffix}`;
+              message = '環境設定を見直してから diagnostics を再実行してください。';
+              note = diagSuffix;
             }
             return { message, note, failingReasons };
           }
@@ -1173,13 +1168,15 @@
             mcpCheck &&
             mcpCheck.ok === true
           ) {
-            message = '次は docs_update を実行してください（docs/.selftest-doc.md を更新して導線確認）。';
+            message = 'Offline smoke OK。次は spawn_smoke を実行してください。';
+          } else if (jobType === 'integration_hub.phase2.mcp.spawn_smoke' && okStatus) {
+            message = 'Spawn smoke OK。次は openai_exec_smoke を実行してください。';
+          } else if (jobType === 'integration_hub.phase2.mcp.openai_exec_smoke' && okStatus) {
+            message = 'OpenAI exec smoke OK。次は docs_update に進んでください。';
           } else if (jobType === 'integration_hub.phase2.docs_update' && okStatus && docsCheck && docsCheck.ok === true) {
-            message = '次は repo_patch（noop）を実行してください（壊さない前提の確認）。';
+            message = 'Docs update OK。次は repo_patch（noop）で安全確認してください。';
           } else if (jobType === 'integration_hub.phase2.repo_patch' && okStatus && repoCheck && repoCheck.ok === true) {
-            message = '絶対ルール：本番ジョブ前に offline_smoke（local_stub）を必ず実行する。';
-            note =
-              '次に進む場合：local_stub 以外（例：spawn/claude-cli等）の実行手段を有効化する設計に移る想定です。';
+            message = 'Repo patch OK。実運用前に offline_smoke を必ず再確認してください。';
           }
           if (hasCodexWarning && okStatus && jobType.includes('openai')) {
             const warningNote = 'Shell snapshot validation failed は exit=0 の場合は無視して構いません（spawn_stderr.txt を参照できます）。';

@@ -1,0 +1,15 @@
+{
+  "ai": {
+    "provider": "",
+    "name": "",
+    "apiKey": ""
+  },
+  "github": {
+    "repo": "",
+    "token": ""
+  },
+  "figma": {
+    "fileUrl": "",
+    "token": ""
+  }
+}

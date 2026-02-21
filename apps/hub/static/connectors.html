@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Integration Hub Connectors</title>
+    <style>
+      :root {
+        font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #0f172a;
+        background-color: #f3f4f6;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        background: #f3f4f6;
+      }
+      header {
+        background: linear-gradient(135deg, #0f172a, #312e81);
+        color: #fff;
+        padding: 2.5rem 1.5rem 2rem;
+        text-align: center;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 2rem;
+        font-weight: 700;
+      }
+      header p {
+        margin: 0.75rem auto 0;
+        max-width: 680px;
+        color: rgba(255, 255, 255, 0.85);
+        line-height: 1.6;
+      }
+      main {
+        max-width: 1100px;
+        margin: -2rem auto 3rem;
+        padding: 0 1.5rem;
+      }
+      .panel {
+        background: #fff;
+        border-radius: 18px;
+        padding: 1.5rem;
+        box-shadow: 0 25px 45px rgba(15, 23, 42, 0.08);
+      }
+      .tabs {
+        display: inline-flex;
+        border: 1px solid #d1d5db;
+        border-radius: 999px;
+        overflow: hidden;
+        margin-bottom: 1.5rem;
+      }
+      .tab-btn {
+        padding: 0.5rem 1.5rem;
+        border: none;
+        background: transparent;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #475569;
+        cursor: pointer;
+      }
+      .tab-btn.active {
+        background: #111827;
+        color: #fff;
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+      .filters label {
+        display: flex;
+        flex-direction: column;
+        font-size: 0.85rem;
+        color: #475569;
+        gap: 0.3rem;
+      }
+      .filters input,
+      .filters select {
+        padding: 0.6rem 0.75rem;
+        border-radius: 10px;
+        border: 1px solid #cbd5f5;
+        min-width: 200px;
+        font-size: 0.95rem;
+      }
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1.25rem;
+      }
+      .card {
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 1.25rem;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        position: relative;
+      }
+      .card .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: #0369a1;
+        background: #e0f2fe;
+        padding: 0.2rem 0.65rem;
+        border-radius: 999px;
+      }
+      .card h3 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+      .card p {
+        margin: 0;
+        color: #475569;
+        line-height: 1.5;
+        flex: 1;
+      }
+      .card .meta {
+        font-size: 0.85rem;
+        color: #94a3b8;
+      }
+      .card button {
+        align-self: flex-start;
+        border: none;
+        background: #2563eb;
+        color: #fff;
+        padding: 0.6rem 1.25rem;
+        border-radius: 10px;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+      .card-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .card .detail-link {
+        color: #2563eb;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+      .card .detail-link:hover {
+        text-decoration: underline;
+      }
+      .card .test-btn {
+        border: none;
+        background: #059669;
+        color: #fff;
+        padding: 0.5rem 1rem;
+        border-radius: 10px;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+      .card .test-btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .smoke-result {
+        margin-top: 0.75rem;
+        background: #f1f5f9;
+        border-radius: 10px;
+        padding: 0.65rem 0.85rem;
+        font-size: 0.85rem;
+        color: #0f172a;
+      }
+      .smoke-result code {
+        background: rgba(15, 23, 42, 0.08);
+        padding: 0.05rem 0.3rem;
+        border-radius: 6px;
+      }
+      .card .icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+        background: #eef2ff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        color: #312e81;
+      }
+      .card .featured-tag {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: #fef3c7;
+        color: #92400e;
+        padding: 0.2rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border-radius: 999px;
+        padding: 0.15rem 0.6rem;
+      }
+      .status-pill.ready {
+        background: #dcfce7;
+        color: #15803d;
+      }
+      .status-pill.pending {
+        background: #fee2e2;
+        color: #b91c1c;
+      }
+      .empty-state {
+        text-align: center;
+        padding: 2rem 1rem;
+        color: #94a3b8;
+        font-size: 1rem;
+      }
+      @media (max-width: 640px) {
+        .filters label {
+          width: 100%;
+        }
+        .filters input,
+        .filters select {
+          width: 100%;
+          min-width: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Connectors カタログ</h1>
+      <p>Integration Hub がサポートする AI / GitHub / Figma などのコネクタを一覧で確認し、必要な設定タブへ遷移できます。</p>
+    </header>
+    <main>
+      <section class="panel">
+        <div class="tabs" role="tablist">
+          <button class="tab-btn active" data-tab="featured">注目</button>
+          <button class="tab-btn" data-tab="all">すべて</button>
+        </div>
+        <div class="filters">
+          <label>
+            <span>検索</span>
+            <input type="search" id="searchInput" placeholder="名前・説明・カテゴリで検索" />
+          </label>
+          <label>
+            <span>タイプ</span>
+            <select id="typeFilter">
+              <option value="all">すべて</option>
+            </select>
+          </label>
+          <label>
+            <span>カテゴリ</span>
+            <select id="categoryFilter">
+              <option value="all">すべて</option>
+            </select>
+          </label>
+        </div>
+        <div class="cards" id="cardsContainer"></div>
+        <div class="empty-state" id="emptyState" hidden>該当するコネクタがありません。</div>
+      </section>
+    </main>
+    <script>
+      const state = {
+        connectors: [],
+        tab: 'featured',
+        type: 'all',
+        category: 'all',
+        search: ''
+      };
+
+      const els = {
+        tabs: document.querySelectorAll('.tab-btn'),
+        search: document.getElementById('searchInput'),
+        typeSelect: document.getElementById('typeFilter'),
+        categorySelect: document.getElementById('categoryFilter'),
+        cards: document.getElementById('cardsContainer'),
+        empty: document.getElementById('emptyState')
+      };
+
+      function setTab(tab) {
+        state.tab = tab;
+        els.tabs.forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === tab));
+        renderCards();
+      }
+
+      function uniqueValues(list, key) {
+        return Array.from(new Set(list.map((item) => item[key]).filter(Boolean))).sort();
+      }
+
+      function initFilters(data) {
+        const types = uniqueValues(data, 'type');
+        const categories = uniqueValues(data, 'category');
+        types.forEach((type) => {
+          const option = document.createElement('option');
+          option.value = type;
+          option.textContent = type;
+          els.typeSelect.appendChild(option);
+        });
+        categories.forEach((category) => {
+          const option = document.createElement('option');
+          option.value = category;
+          option.textContent = category;
+          els.categorySelect.appendChild(option);
+        });
+      }
+
+      function matchesFilters(item) {
+        if (state.tab === 'featured' && !item.featured) {
+          return false;
+        }
+        if (state.type !== 'all' && item.type !== state.type) {
+          return false;
+        }
+        if (state.category !== 'all' && item.category !== state.category) {
+          return false;
+        }
+        if (state.search) {
+          const haystack = `${item.name} ${item.description} ${item.category} ${item.type}`.toLowerCase();
+          if (!haystack.includes(state.search.toLowerCase())) {
+            return false;
+          }
+        }
+        return true;
+      }
+
+      function renderCards() {
+        const filtered = state.connectors.filter(matchesFilters);
+        els.cards.innerHTML = '';
+        if (!filtered.length) {
+          els.empty.hidden = false;
+          return;
+        }
+        els.empty.hidden = true;
+        filtered.forEach((connector) => {
+          const configured = Boolean(connector.status?.configured);
+          const statusText = configured ? '設定済み' : '未設定';
+          const statusClass = configured ? 'ready' : 'pending';
+          const supportsSmoke = ['github', 'figma', 'ai'].includes(connector.provider_key);
+          const card = document.createElement('article');
+          card.className = 'card';
+          card.innerHTML = `
+            ${connector.featured ? '<span class="featured-tag">注目</span>' : ''}
+            <div class="icon">${(connector.icon_key || connector.name).slice(0, 2).toUpperCase()}</div>
+            <div class="badge">${connector.category}</div>
+            <h3>${connector.name}</h3>
+            <p>${connector.description}</p>
+            <div class="meta">タイプ: ${connector.type} / Provider: ${connector.provider_key}</div>
+            <div class="status-pill ${statusClass}">${statusText}</div>
+            <div class="card-actions">
+              <button data-provider="${connector.provider_key}" data-id="${connector.id}">設定へ</button>
+              <a class="detail-link" href="/connectors/${connector.id}">詳細を見る</a>
+              ${
+                supportsSmoke
+                  ? `<button class="test-btn" data-provider="${connector.provider_key}" data-id="${connector.id}">疎通テスト</button>`
+                  : ''
+              }
+            </div>
+            <div class="smoke-result" data-result="${connector.id}" hidden></div>
+          `;
+          card.querySelector('button').addEventListener('click', (event) => {
+            const provider = event.currentTarget.dataset.provider;
+            window.location.href = `/connections#${provider}`;
+          });
+          const smokeBtn = card.querySelector('.test-btn');
+          if (smokeBtn) {
+            smokeBtn.addEventListener('click', async (event) => {
+              const provider = event.currentTarget.dataset.provider;
+              const resultEl = card.querySelector(`.smoke-result[data-result="${connector.id}"]`);
+              await runSmokeTest(provider, smokeBtn, resultEl);
+            });
+          }
+          els.cards.appendChild(card);
+        });
+      }
+
+      async function runSmokeTest(provider, buttonEl, resultEl) {
+        if (!resultEl) return;
+        buttonEl.disabled = true;
+        resultEl.hidden = false;
+        resultEl.textContent = '疎通テスト実行中...';
+        try {
+          const response = await fetch('/api/smoke', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider_key: provider })
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || '疎通テストに失敗しました');
+          }
+          const artifacts =
+            Array.isArray(data.artifacts) && data.artifacts.length
+              ? data.artifacts.map((path) => `<code>${path}</code>`).join('<br />')
+              : '-';
+          const runLink = data.run_id
+            ? `<div><a href="/runs/${data.run_id}" target="_blank">このRunを開く</a></div>`
+            : '';
+          resultEl.innerHTML = `
+            <div>run_id: <code>${data.run_id}</code></div>
+            <div>Status: <strong>${data.status || 'unknown'}</strong></div>
+            <div>Artifacts:<br />${artifacts}</div>
+            ${runLink}
+          `;
+        } catch (error) {
+          resultEl.textContent = `疎通テストに失敗しました: ${error.message}`;
+        } finally {
+          buttonEl.disabled = false;
+        }
+      }
+
+      async function loadCatalog() {
+        try {
+          const res = await fetch('/api/connectors');
+          if (!res.ok) throw new Error('Failed to load catalog');
+          const data = await res.json();
+          state.connectors = Array.isArray(data) ? data : [];
+          initFilters(state.connectors);
+          renderCards();
+        } catch (error) {
+          console.error(error);
+          els.cards.innerHTML = '<div class="empty-state">カタログ読み込みに失敗しました。</div>';
+        }
+      }
+
+      els.tabs.forEach((btn) => {
+        btn.addEventListener('click', () => setTab(btn.dataset.tab));
+      });
+      els.search.addEventListener('input', (event) => {
+        state.search = event.target.value.trim();
+        renderCards();
+      });
+      els.typeSelect.addEventListener('change', (event) => {
+        state.type = event.target.value;
+        renderCards();
+      });
+      els.categorySelect.addEventListener('change', (event) => {
+        state.category = event.target.value;
+        renderCards();
+      });
+
+      loadCatalog();
+    </script>
+  </body>
+</html>

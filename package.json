@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "type": "commonjs",
   "scripts": {
-    "test": "node scripts/selftest.js"
+    "test": "node scripts/selftest.js",
+    "cleanup:runs": "node scripts/cleanup-runs.js"
   }
 }

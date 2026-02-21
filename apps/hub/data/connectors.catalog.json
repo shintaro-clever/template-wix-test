@@ -1,0 +1,74 @@
+[
+  {
+    "id": "ai-codex",
+    "name": "OpenAI Codex",
+    "description": "OpenAI Codex / GPT ベースのクラウドAI実行。spawn + codex CLI の smoke に利用します。",
+    "category": "LLM",
+    "type": "ai",
+    "featured": true,
+    "icon_key": "codex",
+    "provider_key": "ai",
+    "inputs": [
+      { "label": "Provider 名", "description": "例: codex" },
+      { "label": "接続名", "description": "Operatorが識別しやすい任意の名前" },
+      { "label": "API Key", "description": "`OPENAI_API_KEY` と同等のキー" }
+    ]
+  },
+  {
+    "id": "ai-claude",
+    "name": "Anthropic Claude",
+    "description": "Claude Code / MCP 連携向け。claude CLI を利用したローカルMCP実行を想定。",
+    "category": "LLM",
+    "type": "ai",
+    "featured": false,
+    "icon_key": "claude",
+    "provider_key": "ai",
+    "inputs": [
+      { "label": "Provider 名", "description": "例: claude" },
+      { "label": "接続名", "description": "Claude用の識別子" },
+      { "label": "API Key", "description": "`ANTHROPIC_API_KEY` を想定（任意）" }
+    ]
+  },
+  {
+    "id": "github-repo",
+    "name": "GitHub Repository",
+    "description": "owner/repo + token を指定して、Issue/PR同期や差分生成に使う標準コネクタ。",
+    "category": "Source Control",
+    "type": "repo",
+    "featured": true,
+    "icon_key": "github",
+    "provider_key": "github",
+    "inputs": [
+      { "label": "リポジトリ", "description": "owner/repo または https://github.com/... 形式" },
+      { "label": "Token", "description": "必要な scope を付与した PAT (ghp_...)" }
+    ]
+  },
+  {
+    "id": "figma-file",
+    "name": "Figma File",
+    "description": "Figma の file/design URL と token を登録し、UI仕様やコメントを Hub に取り込みます。",
+    "category": "Design",
+    "type": "design",
+    "featured": true,
+    "icon_key": "figma",
+    "provider_key": "figma",
+    "inputs": [
+      { "label": "File / Design URL", "description": "https://www.figma.com/file/... 形式" },
+      { "label": "Token", "description": "figd_ で始まる Personal Access Token" }
+    ]
+  },
+  {
+    "id": "slack-webhook",
+    "name": "Slack Webhook",
+    "description": "進捗通知やジョブ完了報を Slack チャンネルに送る簡易 Webhook 連携。",
+    "category": "Notifications",
+    "type": "chat",
+    "featured": false,
+    "icon_key": "slack",
+    "provider_key": "notifications",
+    "inputs": [
+      { "label": "Webhook URL", "description": "Slack Incoming Webhook URL" },
+      { "label": "Channel", "description": "通知を届けたいチャンネル名（任意）" }
+    ]
+  }
+]
