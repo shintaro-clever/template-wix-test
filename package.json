@@ -4,5 +4,8 @@
   "type": "commonjs",
   "scripts": {
     "test": "node scripts/selftest.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2"
   }
 }

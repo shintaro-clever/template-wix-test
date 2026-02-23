@@ -1,4 +1,2 @@
-
-# local codex config
-.codex/
-.ai-runs/
+node_modules/
+.hub/

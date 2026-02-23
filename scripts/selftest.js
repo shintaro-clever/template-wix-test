@@ -152,6 +152,76 @@ function main() {
 
 main();
 
+// --- MS0 API reachability check (HTTPS) ---
+try {
+  const https = require("https");
+
+  const url = "https://hub.test-plan.help/api/projects";
+
+  function fetch(urlStr) {
+    return new Promise((resolve, reject) => {
+      const req = https.get(
+        urlStr,
+        {
+          timeout: 10_000,
+          headers: { "User-Agent": "integration-hub-selftest" },
+        },
+        (res) => {
+          let data = "";
+          res.on("data", (chunk) => (data += chunk));
+          res.on("end", () => {
+            resolve({
+              status: res.statusCode || 0,
+              headers: res.headers || {},
+              body: data,
+            });
+          });
+        }
+      );
+      req.on("timeout", () => {
+        req.destroy(new Error("timeout"));
+      });
+      req.on("error", reject);
+    });
+  }
+
+  (async () => {
+    const r = await fetch(url);
+    const ct = String(r.headers["content-type"] || "");
+
+    if (r.status !== 200) {
+      throw new Error(`status=${r.status} bodyHead=${JSON.stringify(r.body.slice(0, 200))}`);
+    }
+    if (!ct.includes("application/json")) {
+      throw new Error(`content-type=${ct} bodyHead=${JSON.stringify(r.body.slice(0, 200))}`);
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(r.body);
+    } catch (e) {
+      throw new Error(`json_parse_failed bodyHead=${JSON.stringify(r.body.slice(0, 200))}`);
+    }
+
+    if (!Array.isArray(parsed)) {
+      throw new Error(`expected_array got=${typeof parsed}`);
+    }
+
+    // 現状MS0は [] が期待値（将来CRUDで増えるので “配列であること”を主条件に）
+    if (parsed.length !== 0) {
+      console.log("[selftest] WARN: /api/projects is not empty (ok after MS1). len=" + parsed.length);
+    }
+
+    console.log("[selftest] OK: ms0 api /api/projects reachable");
+  })().catch((e) => {
+    console.error("[selftest] MS0_API_CHECK FAILED:", e?.message || e);
+    process.exitCode = 1;
+  });
+} catch (e) {
+  console.error("[selftest] MS0_API_CHECK INIT FAILED:", e?.message || e);
+  process.exitCode = 1;
+}
+
 // --- Phase2 samples & docs (PR-C) existence checks ---
 try {
   // Keep this lightweight: existence only (no execution, no network).
