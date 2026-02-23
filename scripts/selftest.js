@@ -222,6 +222,76 @@ try {
   process.exitCode = 1;
 }
 
+// --- MS1 Projects CRUD check (HTTPS) ---
+try {
+  const https = require("https");
+  const base = "https://hub.test-plan.help";
+
+  function requestJson(method, path, bodyObj) {
+    const body = bodyObj ? JSON.stringify(bodyObj) : null;
+    const opts = {
+      method,
+      timeout: 10_000,
+      headers: {
+        "User-Agent": "integration-hub-selftest",
+      },
+    };
+    if (body) {
+      opts.headers["Content-Type"] = "application/json";
+      opts.headers["Content-Length"] = Buffer.byteLength(body);
+    }
+    return new Promise((resolve, reject) => {
+      const req = https.request(base + path, opts, (res) => {
+        let data = "";
+        res.on("data", (c) => (data += c));
+        res.on("end", () => resolve({ status: res.statusCode || 0, headers: res.headers || {}, body: data }));
+      });
+      req.on("timeout", () => req.destroy(new Error("timeout")));
+      req.on("error", reject);
+      if (body) req.write(body);
+      req.end();
+    });
+  }
+
+  (async () => {
+    // POST
+    const create = await requestJson("POST", "/api/projects", {
+      name: "Selftest CRUD Project",
+      staging_url: "https://example.com",
+    });
+    if (create.status !== 201) throw new Error(`POST status=${create.status} bodyHead=${create.body.slice(0,200)}`);
+    const created = JSON.parse(create.body);
+    if (!created.id) throw new Error("POST missing id");
+    const id = created.id;
+
+    // GET by id
+    const get1 = await requestJson("GET", `/api/projects/${id}`);
+    if (get1.status !== 200) throw new Error(`GET status=${get1.status} bodyHead=${get1.body.slice(0,200)}`);
+
+    // PATCH
+    const patch = await requestJson("PATCH", `/api/projects/${id}`, { name: "Selftest CRUD Project v2" });
+    if (patch.status !== 200) throw new Error(`PATCH status=${patch.status} bodyHead=${patch.body.slice(0,200)}`);
+    const patched = JSON.parse(patch.body);
+    if (patched.name !== "Selftest CRUD Project v2") throw new Error("PATCH name not applied");
+
+    // DELETE
+    const del = await requestJson("DELETE", `/api/projects/${id}`);
+    if (del.status !== 204) throw new Error(`DELETE status=${del.status} bodyHead=${del.body.slice(0,200)}`);
+
+    // GET should 404
+    const get2 = await requestJson("GET", `/api/projects/${id}`);
+    if (get2.status !== 404) throw new Error(`GET-after-delete expected 404 got=${get2.status}`);
+
+    console.log("[selftest] OK: ms1 projects crud");
+  })().catch((e) => {
+    console.error("[selftest] MS1_PROJECTS_CRUD FAILED:", e?.message || e);
+    process.exitCode = 1;
+  });
+} catch (e) {
+  console.error("[selftest] MS1_PROJECTS_CRUD INIT FAILED:", e?.message || e);
+  process.exitCode = 1;
+}
+
 // --- Phase2 samples & docs (PR-C) existence checks ---
 try {
   // Keep this lightweight: existence only (no execution, no network).
