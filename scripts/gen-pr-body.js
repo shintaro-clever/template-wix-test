@@ -2,7 +2,7 @@
 const { spawnSync } = require("child_process");
 
 function sh(cmd, args, opts = {}) {
-  return spawnSync(cmd, args, { encoding: "utf8", ...opts });
+  return spawnSync(cmd, args, { encoding: "utf8", timeout: 10000, ...opts });
 }
 
 function must(cmd, args, opts = {}) {
