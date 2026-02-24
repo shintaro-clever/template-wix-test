@@ -117,9 +117,15 @@ function runJobWithRunId(jobPath, extraEnv = {}) {
 }
 
 function validateSamples() {
-  const offlineJob = JSON.parse(fs.readFileSync(path.join(__dirname, 'sample-job.mcp.offline.smoke.json'), 'utf8'));
-  const docsJob = JSON.parse(fs.readFileSync(path.join(__dirname, 'sample-job.docs.update.json'), 'utf8'));
-  const repoJob = JSON.parse(fs.readFileSync(path.join(__dirname, 'sample-job.repo_patch.hub-static.json'), 'utf8'));
+  const offlineJob = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'sample-job.mcp.offline.smoke.json'), 'utf8')
+  );
+  const docsJob = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'sample-job.docs.update.json'), 'utf8')
+  );
+  const repoJob = JSON.parse(
+    fs.readFileSync(path.join(__dirname, 'sample-job.repo_patch.hub-static.json'), 'utf8')
+  );
   assert(validateJob(offlineJob).ok, 'offline smoke sample fails validation');
   assert(validateJob(docsJob).ok, 'docs update sample fails validation');
   assert(validateJob(repoJob).ok, 'repo patch sample fails validation');
@@ -230,19 +236,14 @@ async function verifyFigmaDepthNormalization() {
       endpoint: '/files/mock-depth',
       query: { depth: 0 }
     });
-    assert(
-      depthCall.debug && depthCall.debug.query.depth === 1,
-      'callFigmaApi should normalize depth to >=1'
-    );
+    assert(depthCall.debug && depthCall.debug.query.depth === 1, 'callFigmaApi should normalize depth to >=1');
+
     const undefinedCall = await callFigmaApi({
       token: 'mock-token',
       endpoint: '/files/mock-none',
       query: { depth: undefined }
     });
-    assert(
-      undefinedCall.debug && !('depth' in undefinedCall.debug.query),
-      'callFigmaApi should omit undefined depth'
-    );
+    assert(undefinedCall.debug && !('depth' in undefinedCall.debug.query), 'callFigmaApi should omit undefined depth');
   } finally {
     if (prevMock === undefined) {
       delete process.env.FIGMA_API_MOCK;
@@ -264,37 +265,24 @@ function verifyCodexPromptHeader() {
   const initialLang = (originalEnv || '').toLowerCase();
   const allowEn = truthy(process.env.ALLOW_CODEX_EN);
   if (ciMode && initialLang === 'en' && !allowEn) {
-    throw new Error(
-      'CODEX_OUTPUT_LANG=en is blocked in CI unless ALLOW_CODEX_EN=1 (or true/yes).'
-    );
+    throw new Error('CODEX_OUTPUT_LANG=en is blocked in CI unless ALLOW_CODEX_EN=1 (or true/yes).');
   }
+
   delete process.env.CODEX_OUTPUT_LANG;
   const defaultPrompt = buildCodexPrompt('デフォルト指示');
-  assert(
-    defaultPrompt.includes('出力言語は常に日本語です。'),
-    'Default codex prompt must mention Japanese language rule'
-  );
-  assert(
-    defaultPrompt.includes('更新内容') && defaultPrompt.includes('手順'),
-    'Default codex prompt must outline Japanese headings'
-  );
+  assert(defaultPrompt.includes('出力言語は常に日本語です。'), 'Default codex prompt must mention Japanese language rule');
+  assert(defaultPrompt.includes('更新内容') && defaultPrompt.includes('手順'), 'Default codex prompt must outline Japanese headings');
+
   process.env.CODEX_OUTPUT_LANG = 'ja';
   const prompt = buildCodexPrompt('テスト指示');
   assert(prompt.includes('出力言語は常に日本語です。'), 'Japanese policy must mention language rule');
-  assert(
-    prompt.includes('更新内容') && prompt.includes('手順') && prompt.includes('次のステップ'),
-    'Japanese policy must outline heading requirements'
-  );
+  assert(prompt.includes('更新内容') && prompt.includes('手順') && prompt.includes('次のステップ'), 'Japanese policy must outline heading requirements');
+
   process.env.CODEX_OUTPUT_LANG = 'en';
   const englishPrompt = buildCodexPrompt('Test instructions');
-  assert(
-    englishPrompt.includes('Always respond in English.'),
-    'English codex prompt must switch when env override is set'
-  );
-  assert(
-    !englishPrompt.includes('出力言語は常に日本語です。'),
-    'English codex prompt must not include Japanese header'
-  );
+  assert(englishPrompt.includes('Always respond in English.'), 'English codex prompt must switch when env override is set');
+  assert(!englishPrompt.includes('出力言語は常に日本語です。'), 'English codex prompt must not include Japanese header');
+
   if (originalEnv === undefined) {
     delete process.env.CODEX_OUTPUT_LANG;
   } else {
@@ -337,18 +325,9 @@ function verifyFigmaPlanGuarantee() {
     const invalidPlanPath = path.join(RUNS_ROOT, invalidRun.runId, 'figma_bootstrap_plan.json');
     assert(fs.existsSync(invalidPlanPath), 'plan file missing for invalid target path');
     const invalidPlan = JSON.parse(fs.readFileSync(invalidPlanPath, 'utf8'));
-    assert(
-      invalidPlan.status === 'error',
-      'plan status should be error when job fails before planning completes'
-    );
-    assert(
-      Array.isArray(invalidPlan.errors) && invalidPlan.errors.length > 0,
-      'plan errors missing for invalid target path'
-    );
-    assert(
-      invalidPlan.errors[0].where === 'constraints',
-      'plan error should record constraints failure'
-    );
+    assert(invalidPlan.status === 'error', 'plan status should be error when job fails before planning completes');
+    assert(Array.isArray(invalidPlan.errors) && invalidPlan.errors.length > 0, 'plan errors missing for invalid target path');
+    assert(invalidPlan.errors[0].where === 'constraints', 'plan error should record constraints failure');
 
     const missingRepoJob = createTempJob('missing_repo', (job) => {
       job.inputs.repo_local_path = 'vault/targets/does-not-exist';
@@ -358,17 +337,10 @@ function verifyFigmaPlanGuarantee() {
     const missingPlanPath = path.join(RUNS_ROOT, missingRun.runId, 'figma_bootstrap_plan.json');
     assert(fs.existsSync(missingPlanPath), 'plan file missing for missing repo directory');
     const missingPlan = JSON.parse(fs.readFileSync(missingPlanPath, 'utf8'));
+    assert(Array.isArray(missingPlan.errors) && missingPlan.errors.length > 0, 'plan errors missing for missing repo directory');
+    assert(missingPlan.errors[0].where === 'resolveRepoRoot', 'plan error should capture resolveRepoRoot failure');
     assert(
-      Array.isArray(missingPlan.errors) && missingPlan.errors.length > 0,
-      'plan errors missing for missing repo directory'
-    );
-    assert(
-      missingPlan.errors[0].where === 'resolveRepoRoot',
-      'plan error should capture resolveRepoRoot failure'
-    );
-    assert(
-      typeof missingPlan.errors[0].root === 'string' &&
-        missingPlan.errors[0].root.includes('vault/targets/does-not-exist'),
+      typeof missingPlan.errors[0].root === 'string' && missingPlan.errors[0].root.includes('vault/targets/does-not-exist'),
       'plan error root should include repo_local_path'
     );
   } finally {
@@ -396,12 +368,7 @@ function verifyCleanupRunsScript() {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cleanup-runs-'));
   const runsDir = path.join(tmpRoot, '.ai-runs');
   const dayMs = 24 * 60 * 60 * 1000;
-  const names = [
-    'ml000000-abcdef',
-    'ml000001-abcdee',
-    'ml000002-abcddd',
-    'ml000003-abcdcc'
-  ];
+  const names = ['ml000000-abcdef', 'ml000001-abcdee', 'ml000002-abcddd', 'ml000003-abcdcc'];
   const agesInDays = [0, 0.5, 2, 3];
 
   function seedRuns() {
@@ -417,48 +384,30 @@ function verifyCleanupRunsScript() {
     fs.writeFileSync(path.join(runsDir, 'README.md'), 'leave me'); // ignored by pattern
   }
 
-  const listRuns = () =>
+  const listRunsLocal = () =>
     fs
       .readdirSync(runsDir)
       .filter((name) => !name.startsWith('.'))
       .sort();
 
   seedRuns();
-  const dryRun = spawnSync(
-    'node',
-    ['scripts/cleanup-runs.js', '--dir', runsDir, '--keep', '2'],
-    { encoding: 'utf8' }
-  );
+  const dryRun = spawnSync('node', ['scripts/cleanup-runs.js', '--dir', runsDir, '--keep', '2'], { encoding: 'utf8' });
   assert(dryRun.status === 0, 'cleanup-runs dry-run should exit 0');
-  const afterDry = listRuns();
+  const afterDry = listRunsLocal();
   assert(afterDry.length === names.length + 1, 'dry-run must not delete directories or files');
   assert(afterDry.includes('README.md'), 'non-run files should remain untouched');
 
-  const applyKeep = spawnSync(
-    'node',
-    ['scripts/cleanup-runs.js', '--dir', runsDir, '--keep', '2', '--apply'],
-    { encoding: 'utf8' }
-  );
+  const applyKeep = spawnSync('node', ['scripts/cleanup-runs.js', '--dir', runsDir, '--keep', '2', '--apply'], { encoding: 'utf8' });
   assert(applyKeep.status === 0, 'cleanup-runs apply should exit 0');
-  const remainingKeep = listRuns().filter((name) => name !== 'README.md');
+  const remainingKeep = listRunsLocal().filter((name) => name !== 'README.md');
   assert(remainingKeep.length === 2, 'cleanup-runs should leave 2 directories when keep=2');
-  assert(
-    remainingKeep[0] === names[0] && remainingKeep[1] === names[1],
-    'cleanup-runs should keep newest directories'
-  );
+  assert(remainingKeep[0] === names[0] && remainingKeep[1] === names[1], 'cleanup-runs should keep newest directories');
 
   seedRuns();
-  const applyDays = spawnSync(
-    'node',
-    ['scripts/cleanup-runs.js', '--dir', runsDir, '--days', '1', '--apply'],
-    { encoding: 'utf8' }
-  );
+  const applyDays = spawnSync('node', ['scripts/cleanup-runs.js', '--dir', runsDir, '--days', '1', '--apply'], { encoding: 'utf8' });
   assert(applyDays.status === 0, 'cleanup-runs days filter should exit 0');
-  const remainingDays = listRuns().filter((name) => name !== 'README.md');
-  assert(
-    remainingDays.length === 2 && remainingDays[0] === names[0] && remainingDays[1] === names[1],
-    '--days should remove entries older than threshold'
-  );
+  const remainingDays = listRunsLocal().filter((name) => name !== 'README.md');
+  assert(remainingDays.length === 2 && remainingDays[0] === names[0] && remainingDays[1] === names[1], '--days should remove entries older than threshold');
 
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 }
@@ -481,14 +430,7 @@ function verifyNoEnglishTemplateLeak() {
   const escaped = tokens.map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
   const regex = new RegExp(`\\b(${escaped.join('|')})\\b`);
   const allowed = new Set(['src/codex/policies/en.md', 'AI_DEV_POLICY.md']);
-  const skipDirs = new Set([
-    '.git',
-    '.ai-runs',
-    'node_modules',
-    '.codex',
-    '.github',
-    'vault'
-  ]);
+  const skipDirs = new Set(['.git', '.ai-runs', 'node_modules', '.codex', '.github', 'vault']);
   const matches = [];
   const root = process.cwd();
 
@@ -496,25 +438,21 @@ function verifyNoEnglishTemplateLeak() {
     let entries = [];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch (error) {
+    } catch {
       return;
     }
     entries.forEach((entry) => {
       const absPath = path.join(dir, entry.name);
       const relPath = path.relative(root, absPath);
+
       if (entry.isDirectory()) {
-        if (skipDirs.has(entry.name)) {
-          return;
-        }
+        if (skipDirs.has(entry.name)) return;
         walk(absPath);
         return;
       }
-      if (!entry.isFile()) {
-        return;
-      }
-      if (allowed.has(relPath)) {
-        return;
-      }
+      if (!entry.isFile()) return;
+      if (allowed.has(relPath)) return;
+
       let content;
       try {
         content = fs.readFileSync(absPath, 'utf8');
@@ -532,10 +470,30 @@ function verifyNoEnglishTemplateLeak() {
 
   walk(root);
   if (matches.length > 0) {
-    throw new Error(
-      `English template tokens detected outside allowlist:\n${matches.slice(0, 5).join('\n')}`
-    );
+    throw new Error(`English template tokens detected outside allowlist:\n${matches.slice(0, 5).join('\n')}`);
   }
+}
+
+function verifyPhase2SamplesExist() {
+  // Keep this lightweight: existence only (no execution, no network).
+  const paths = [
+    'scripts/sample-job.mcp.offline.smoke.json',
+    'scripts/sample-job.docs.update.json',
+    'scripts/sample-job.repo_patch.hub-static.json',
+    'scripts/sample-job.spawn_smoke.json',
+    'scripts/sample-job.diagnostics.json',
+    'scripts/sample-job.openai_exec_smoke.json',
+    'docs/.selftest-doc.md',
+    'apps/hub/static/offline-job.fixture.json'
+  ];
+
+  for (const fp of paths) {
+    if (!fs.existsSync(fp)) {
+      throw new Error(`missing: ${fp}`);
+    }
+  }
+
+  console.log('[selftest] OK: phase2 samples/docs exist');
 }
 
 async function main() {
@@ -550,31 +508,11 @@ async function main() {
   await verifyServerRoutes();
   await verifyFigmaDepthNormalization();
   verifyFigmaPlanGuarantee();
+  verifyPhase2SamplesExist();
   console.log('Selftest ok');
 }
 
-function verifyPhase2SamplesExist() {
-  const paths = [
-    'scripts/sample-job.mcp.offline.smoke.json',
-    'scripts/sample-job.docs.update.json',
-    'scripts/sample-job.repo_patch.hub-static.json',
-    'scripts/sample-job.spawn_smoke.json',
-    'scripts/sample-job.diagnostics.json',
-    'scripts/sample-job.openai_exec_smoke.json',
-    'docs/.selftest-doc.md',
-    'apps/hub/static/offline-job.fixture.json'
-  ];
-  for (const fp of paths) {
-    if (!fs.existsSync(fp)) {
-      throw new Error(`missing: ${fp}`);
-    }
-  }
-  console.log('[selftest] OK: phase2 samples/docs exist');
-}
-
-main()
-  .then(() => verifyPhase2SamplesExist())
-  .catch((error) => {
-    console.error(error && error.message ? error.message : error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error(error && error.message ? error.message : error);
+  process.exit(1);
+});
