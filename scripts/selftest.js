@@ -151,6 +151,10 @@ function validateOfflineFixture(sampleOfflineJob) {
 }
 
 function verifyOfflineSmoke() {
+  if (process.env.SKIP_INTEGRATION_TESTS === '1') {
+    console.log('[selftest] SKIP_INTEGRATION_TESTS=1: skipping offline smoke');
+    return;
+  }
   const jobPath = path.join(__dirname, 'sample-job.mcp.offline.smoke.json');
   const before = listRuns();
   const result = runJob(jobPath);
