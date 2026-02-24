@@ -1,66 +1,80 @@
-# Integration Hub Codex Runbook (SoT)
-
-## Objective
-Codex should be able to:
-- implement minimal verified changes,
-- generate PR body that strictly matches `.github/PULL_REQUEST_TEMPLATE.md`,
-- push branch,
-- create or update PR when GitHub API is reachable,
-- otherwise output PR body for manual paste in GitHub Web UI.
-
-## Non-negotiable rules
-1) **No guessing**: PR body must be based on `git show --stat` and `git diff --name-only` for the current branch. Do not describe changes not present in the diff; the generators (`scripts/gen-pr-body.js` / `scripts/pr-body-verify.js`) must rely on these commands as the single source of truth.
-2) **Template lock**: PR body must follow `.github/PULL_REQUEST_TEMPLATE.md` section order and wording.
-3) **Checkbox rules**:
-   - In "関連Issue": exactly one of the two must be `[x]`.
-   - In "完了条件": at least one must be `[x]`.
-4) **Verification**: run `npm test` before push.
-5) **Conflict handling**: prefer `git merge origin/main` (no rebase). Keep diff minimal and avoid unrelated edits.
-6) **Network policy**:
-   - Before any `gh pr create/edit`, run `curl -I https://api.github.com`.
-   - If unreachable, do NOT run `gh pr` commands. Instead print PR body for manual paste.
-   - Network reachability is judged by `curl -I https://github.com` (or `git ls-remote origin HEAD`) succeeding. `getent hosts` may produce false negatives and must not be used as the gating condition (it can still be logged for diagnostics).
-
-## Default workflow (Codex executes)
-0) Observe repo state:
-   - `git status`
-   - current branch name
-1) Sync:
-   - `git fetch origin`
-2) Make minimal change required by the task.
-3) Run:
-   - `npm test`
-4) Commit:
-   - concise message (e.g. `chore: ...` / `fix: ...` / `feat: ...`)
-5) Push:
-   - `git push -u origin <branch>`
-6) PR body:
-   - `node scripts/gen-pr-body.js` (uses git diff to fill template without guesswork)
-   - `node scripts/pr-body-verify.js /tmp/pr.md` (guards template compliance)
-7) PR operation:
-   - if API reachable: `gh pr create` (or `gh pr edit` if PR exists) using `--body-file /tmp/pr.md`
-   - else: `cat /tmp/pr.md` and instruct user to paste in Web UI.
-
-## What user needs to type (minimal)
-- 「PRあげてください」
+# AGENTS.md
 
 ## PR Up（「PRあげてください」運用）
 
-### ユーザー入力（最小）
-- ユーザーは「PRあげてください」とだけ指示する
+タスク完了後は必ず以下を実行する：
 
-### Codex の実行（固定）
-- Codex は必ず `node scripts/pr-up.js` を実行する
-- 失敗時は「失敗したコマンド」と「ログ抜粋（末尾数行）」を返す
+```
+node scripts/pr-up.js
+```
 
-### ネットワーク判定（既存ルールと整合）
-- `curl -I https://github.com`（200系）または `git ls-remote origin HEAD` が成功すればネットワーク可と判断する
-- `getent hosts` は偽陰性が出やすいためゲート条件には使わず、必要ならログ用途に限る
+このスクリプトが以下をすべて自動処理する：
+- `npm test`
+- `scripts/gen-pr-body.js` → `/tmp/pr.md` 生成
+- `git push`
+- `gh pr create` または `gh pr edit`
 
-### 2レーン運用（停止しない）
-- レーンA（ネットワーク可）：`node scripts/pr-up.js` で push→PR作成/更新まで完走
-- レーンB（ネットワーク不可）：フォールバック案内に従い、ネットワーク可環境で push を実施後に再度 `node scripts/pr-up.js`
-- CLI 実行が難しい場合は `/tmp/pr.md` を GitHub Web UI に貼り付けて PR本文とする
+## ブランチ命名規則
 
-### 初回の最終確認（必須）
-運用開始前にネットワーク可環境で一度だけ、`node scripts/pr-up.js` が push→PR作成→PR Gate 緑まで完走することを確認する。
+`issue-<番号>-<スラッグ>` 形式にすること。  
+例: `issue-42-ms0-schema`
+
+main/master での実行は拒否される。必ず feature ブランチで作業すること。
+
+## PR作成後のローカル後始末
+
+```bash
+git checkout main
+git pull origin main
+git branch -d <作業ブランチ名>
+```
+
+次のタスクは最新の main から新しいブランチを切って始める：
+
+```bash
+git checkout -b issue-<番号>-<スラッグ>
+```
+
+## stash pop 後の確認
+
+`git stash pop` を実行した後は必ず以下を確認してからコミットする：
+
+```bash
+git status
+```
+
+`Unmerged paths` が表示された場合はコンフリクトを解消してから `git add` する。
+
+## ネットワーク障害時のフォールバック
+
+`git push` または `gh pr create` が失敗した場合、スクリプトがコピペ可能なコマンドを出力する。
+その場合はネットワーク可のターミナルで出力されたコマンドを実行すること。
+
+## 失敗時のルール
+
+- 推測で原因を書かない
+- 失敗したコマンドと stderr 末尾をそのまま返す
+
+## 禁止事項
+
+- `.github/PULL_REQUEST_TEMPLATE.md` のプレースホルダー文字列を変更しないこと  
+  （`gen-pr-body.js` の正規表現が壊れる）
+- `/tmp/pr.md` を手動編集しないこと（上書きされる）
+
+## Codex の起動方法
+
+必ず以下のエイリアスが設定された状態で起動すること（~/.bashrc に設定済み）：
+```bash
+alias codex='codex --sandbox=workspace-write'
+```
+
+### サンドボックスモードの選択理由
+- `workspace-write`: ワークスペース内の読み書き＋ネットワークアクセスを許可。ワークスペース外のファイル操作は制限される。**通常運用はこれを使う。**
+- `danger-full-access`: 全操作無制限。セキュリティリスクが高いため使用禁止。
+
+### 禁則事項
+- `--dangerously-bypass-approvals-and-sandbox` オプションは使用禁止
+- `--sandbox=danger-full-access` は使用禁止
+- Codex に `rm -rf` を含む破壊的コマンドを単体で指示しない
+- Codex にシークレット（APIキー・トークン）を直接渡さない
+- `.env` ファイルや `auth.json` の内容を Codex に表示させない

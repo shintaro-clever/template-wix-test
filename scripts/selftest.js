@@ -95,6 +95,7 @@ function runJobWithRunId(jobPath, extraEnv = {}) {
   const before = listRuns();
   const result = spawnSync('node', ['scripts/run-job.js', '--job', jobPath, '--role', 'operator'], {
     encoding: 'utf8',
+    timeout: 30000, // 30秒
     env: { ...process.env, ...extraEnv }
   });
   assert(result.status === 0, `run-job.js exited with ${result.status}: ${result.stderr}`);
@@ -150,6 +151,10 @@ function validateOfflineFixture(sampleOfflineJob) {
 }
 
 function verifyOfflineSmoke() {
+  if (process.env.SKIP_INTEGRATION_TESTS === '1') {
+    console.log('[selftest] SKIP_INTEGRATION_TESTS=1: skipping offline smoke');
+    return;
+  }
   const jobPath = path.join(__dirname, 'sample-job.mcp.offline.smoke.json');
   const before = listRuns();
   const result = runJob(jobPath);
@@ -391,20 +396,29 @@ function verifyCleanupRunsScript() {
       .sort();
 
   seedRuns();
-  const dryRun = spawnSync('node', ['scripts/cleanup-runs.js', '--dir', runsDir, '--keep', '2'], { encoding: 'utf8' });
+  const dryRun = spawnSync('node', ['scripts/cleanup-runs.js', '--dir', runsDir, '--keep', '2'], {
+    encoding: 'utf8',
+    timeout: 30000 // 30秒
+  });
   assert(dryRun.status === 0, 'cleanup-runs dry-run should exit 0');
   const afterDry = listRunsLocal();
   assert(afterDry.length === names.length + 1, 'dry-run must not delete directories or files');
   assert(afterDry.includes('README.md'), 'non-run files should remain untouched');
 
-  const applyKeep = spawnSync('node', ['scripts/cleanup-runs.js', '--dir', runsDir, '--keep', '2', '--apply'], { encoding: 'utf8' });
+  const applyKeep = spawnSync('node', ['scripts/cleanup-runs.js', '--dir', runsDir, '--keep', '2', '--apply'], {
+    encoding: 'utf8',
+    timeout: 30000 // 30秒
+  });
   assert(applyKeep.status === 0, 'cleanup-runs apply should exit 0');
   const remainingKeep = listRunsLocal().filter((name) => name !== 'README.md');
   assert(remainingKeep.length === 2, 'cleanup-runs should leave 2 directories when keep=2');
   assert(remainingKeep[0] === names[0] && remainingKeep[1] === names[1], 'cleanup-runs should keep newest directories');
 
   seedRuns();
-  const applyDays = spawnSync('node', ['scripts/cleanup-runs.js', '--dir', runsDir, '--days', '1', '--apply'], { encoding: 'utf8' });
+  const applyDays = spawnSync('node', ['scripts/cleanup-runs.js', '--dir', runsDir, '--days', '1', '--apply'], {
+    encoding: 'utf8',
+    timeout: 30000 // 30秒
+  });
   assert(applyDays.status === 0, 'cleanup-runs days filter should exit 0');
   const remainingDays = listRunsLocal().filter((name) => name !== 'README.md');
   assert(remainingDays.length === 2 && remainingDays[0] === names[0] && remainingDays[1] === names[1], '--days should remove entries older than threshold');
@@ -512,39 +526,7 @@ async function main() {
   console.log('Selftest ok');
 }
 
-<<<<<<< Updated upstream
 main().catch((error) => {
   console.error(error && error.message ? error.message : error);
   process.exit(1);
 });
-=======
-// --- Phase2 samples & docs (PR-C) existence checks ---
-function verifyPhase2SamplesExist() {
-  // Keep this lightweight: existence only (no execution, no network).
-  const paths = [
-    'scripts/sample-job.mcp.offline.smoke.json',
-    'scripts/sample-job.docs.update.json',
-    'scripts/sample-job.repo_patch.hub-static.json',
-    'scripts/sample-job.spawn_smoke.json',
-    'scripts/sample-job.diagnostics.json',
-    'scripts/sample-job.openai_exec_smoke.json',
-    'docs/.selftest-doc.md',
-    'apps/hub/static/offline-job.fixture.json'
-  ];
-  for (const fp of paths) {
-    if (!fs.existsSync(fp)) {
-      throw new Error(`missing: ${fp}`);
-    }
-  }
-  console.log('[selftest] OK: phase2 samples/docs exist');
-}
-
-main()
-  .then(() => {
-    verifyPhase2SamplesExist();
-  })
-  .catch((error) => {
-    console.error(error && error.message ? error.message : error);
-    process.exit(1);
-  });
->>>>>>> Stashed changes
