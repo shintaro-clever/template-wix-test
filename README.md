@@ -1,39 +1,22 @@
 Phase1 Integration Hub Stub（検証器：/jobs）
 
-/jobs は本体UIではなく、Phase2 の「ジョブ生成→実行→結果取り込み→次アクション」を回すための 検証用UIです。
+/jobs は本体UIではなく、Phase2 の「ジョブ生成→実行→結果取り込み→次アクション」を回すための検証用UIです。
 
-<<<<<<< Updated upstream
-このリポジトリは、各プロジェクトで **Figma × AI × GitHub** を「壊れない運用」で回すための  
+このリポジトリは、各プロジェクトで **Figma × AI × GitHub** を「壊れない運用」で回すための
 **共通ルール・CIゲート・一次情報（SoT）**を提供します。
-=======
-Hub Jobs 最短ループ（手動確認フロー）
->>>>>>> Stashed changes
 
-（任意）Diagnostics: /jobs で Diagnostics ジョブを生成・保存し、実行
-
-<<<<<<< Updated upstream
 ## Goal（このテンプレの目的）
 
 - Issue → PR → Decision を短時間でトレース可能にする
 - “会話で決めたが消える” を防ぐ（意思決定は GitHub に残す）
 - テンプレ＋CIでリンク欠落・ルール逸脱を物理的に防止する
-=======
-Offline smoke
 
-Spawn smoke
-
-OpenAI exec smoke
->>>>>>> Stashed changes
-
-Docs update
-
-<<<<<<< Updated upstream
 ## This Repo Provides（配布物）
 
 - Issue Form Template（AI Bootstrap）
 - PR Template
 - PR Gate（GitHub Actions）
-- Docs（SoT：workflow / decision policy / Phase2-min specs など）
+- Docs（SoT: workflow / decision policy / Phase2-min specs など）
 
 ---
 
@@ -45,48 +28,22 @@ Docs update
 4. PR作成（PRテンプレ使用）
 5. PR Gate が緑 → Merge
 6. Decision（必要なら Issue コメントに残す）
-=======
-Repo patch（noop）
->>>>>>> Stashed changes
 
-# 1) Offline smoke
-node scripts/run-job.js --job job.offline_smoke.json --role operator
-
-<<<<<<< Updated upstream
 ## Rules（必須）
 
 ### Issue（案件のSoT）
+
 - `Figma URL / Default AI / AI thread URL(s) / Acceptance Criteria` を必須入力
-=======
-# 2) Spawn smoke
-node scripts/run-job.js --job job.spawn_smoke.json --role operator
->>>>>>> Stashed changes
 
-# 3) OpenAI exec smoke
-# OPENAI_API_KEY を設定してから実行
-node scripts/run-job.js --job job.openai_exec_smoke.json --role operator
-
-# 4) Docs update
-node scripts/run-job.js --job job.docs_update.json --role operator
-
-<<<<<<< Updated upstream
 ## Product UI（本体UIの構成）
 
 本体プロダクトは以下の導線を想定します。
 
-1. **Connectors（一覧）**：対応ツール（コネクタ）を一覧表示し、検索/フィルタで選択する
-2. **Connector詳細（設定）**：ツールごとの接続情報（Token/OAuth/権限）を設定し、状態（未設定/接続OK/権限不足/エラー等）を表示する
-3. **Account（アカウント設定）**：ワークスペース・権限・保存方針（Secrets移行など）を管理する
-4. **Chat（操作入口）**：チャット画面から、Figma / GitHub / AI を横断して作業を進める
-=======
-# 5) Repo patch（noop）
-node scripts/run-job.js --job job.repo_patch.json --role operator
->>>>>>> Stashed changes
+1. **Connectors（一覧）**: 対応ツール（コネクタ）を一覧表示し、検索/フィルタで選択する
+2. **Connector詳細（設定）**: ツールごとの接続情報（Token/OAuth/権限）を設定し、状態（未設定/接続OK/権限不足/エラー等）を表示する
+3. **Account（アカウント設定）**: ワークスペース・権限・保存方針（Secrets移行など）を管理する
+4. **Chat（操作入口）**: チャット画面から、Figma / GitHub / AI を横断して作業を進める
 
-# 最新 run_id:
-RID="$(ls -1 .ai-runs | tail -n 1)"
-
-<<<<<<< Updated upstream
 ## Not Included（このテンプレが提供しないもの）
 
 - Integration Hub 本体（RBAC/Audit/UI/APIなどのサービス実装）
@@ -111,8 +68,8 @@ RID="$(ls -1 .ai-runs | tail -n 1)"
 
 ## Current Status（いま出来ていること）
 
-- PR Gate（Actions）：PR本文の必須要素チェック（Issue参照 / Figma / ACチェック）
-- Issue Form：Figma URL / AI thread URL(s) / Acceptance Criteria の入力
+- PR Gate（Actions）: PR本文の必須要素チェック（Issue参照 / Figma / ACチェック）
+- Issue Form: Figma URL / AI thread URL(s) / Acceptance Criteria の入力
 - Phase1 Integration Hub Stub（検証器としての `/jobs`）
 - Connections 設定UI（暫定）
 
@@ -125,6 +82,33 @@ npm test
 ./bin/dev
 # open:
 # http://127.0.0.1:3000/jobs
-=======
-stderr に既知の警告が含まれる場合があるため、.ai-runs/<run_id>/ 配下の成果物で原文を確認してから判断してください。
->>>>>>> Stashed changes
+```
+
+## Hub Jobs 最短ループ（手動確認フロー）
+
+（任意）Diagnostics: `/jobs` で Diagnostics ジョブを生成・保存し、実行
+
+```bash
+# 1) Offline smoke
+node scripts/run-job.js --job job.offline_smoke.json --role operator
+
+# 2) Spawn smoke
+node scripts/run-job.js --job job.spawn_smoke.json --role operator
+
+# 3) OpenAI exec smoke
+# OPENAI_API_KEY を設定してから実行
+node scripts/run-job.js --job job.openai_exec_smoke.json --role operator
+
+# 4) Docs update
+node scripts/run-job.js --job job.docs_update.json --role operator
+
+# 5) Repo patch（noop）
+node scripts/run-job.js --job job.repo_patch.json --role operator
+
+# 最新 run_id
+RID="$(ls -1 .ai-runs | tail -n 1)"
+```
+
+stderr に既知の警告が含まれる場合があるため、`.ai-runs/<run_id>/` 配下の成果物で原文を確認してから判断してください。
+
+PR test line: one-line README update to verify PR creation flow.
