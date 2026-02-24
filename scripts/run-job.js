@@ -3,14 +3,46 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { execSync, spawn } = require('child_process');
+const { URLSearchParams } = require('url');
 const { validateJob } = require('../src/jobSpec');
 const { run: runAdapter } = require('../src/runnerAdapter');
+const { callFigmaApi } = require('../src/figma/api');
+const { applyCodexPrompt } = require('../src/codex/prompt');
 
 const SCHEMA_VERSION = 'phase2/v1';
 const ALLOWED_SPAWN_COMMANDS = new Set(['node', 'npx', 'git', 'php', 'codex']);
 const SPAWN_ENV_ALLOWLIST = ['PATH', 'HOME', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'];
 const MAX_SPAWN_CAPTURE = 4000;
 const CODEX_SHELL_WARNING = 'Shell snapshot validation failed';
+const FIGMA_DEBUG_ENABLED = /^(1|true|yes)$/i.test(String(process.env.FIGMA_DEBUG || ''));
+function formatFigmaRequestLog(label, debugInfo) {
+  if (!FIGMA_DEBUG_ENABLED || !debugInfo) {
+    return null;
+  }
+  const hasQuery = debugInfo.query && Object.keys(debugInfo.query).length > 0;
+  const queryString = hasQuery ? `?${new URLSearchParams(debugInfo.query).toString()}` : '';
+  return `figma_req[${label}]=${debugInfo.endpoint}${queryString}`;
+}
+const SCREEN_IGNORES = new Set([
+  'node_modules',
+  '.git',
+  '.next',
+  'out',
+  'build',
+  'dist',
+  'coverage',
+  '.ai-runs',
+  '.turbo',
+  'tmp'
+]);
+const SCREEN_PATTERNS_DESCRIPTION = [
+  'next-app-router',
+  'next-pages',
+  'template',
+  'react-route',
+  'php-public'
+].join(',');
+const SCREEN_PATTERN_LIST = SCREEN_PATTERNS_DESCRIPTION.split(',');
 
 function parseArgs(argv) {
   const args = { role: 'operator' };
@@ -134,6 +166,249 @@ function writeJsonArtifact(relativePath, payload) {
   return relativePath;
 }
 
+function extractFigmaFileKey(input) {
+  const raw = String(input || '').trim();
+  if (!raw) {
+    throw new Error('figma_design_url / figma_file_key が指定されていません');
+  }
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(raw)) {
+    return raw;
+  }
+  try {
+    const url = new URL(raw);
+    const segments = url.pathname.split('/').filter(Boolean);
+    const idx = segments.findIndex((segment) => segment === 'file' || segment === 'design');
+    if (idx >= 0 && segments[idx + 1]) {
+      return segments[idx + 1];
+    }
+    if (segments.length >= 1) {
+      return segments[0];
+    }
+  } catch {
+    // ignore
+  }
+  throw new Error('Figma ファイルキーを抽出できませんでした');
+}
+
+function normalizeRepoReference(value) {
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return null;
+  }
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    try {
+      const url = new URL(raw);
+      const segments = url.pathname.split('/').filter(Boolean);
+      if (segments.length >= 2) {
+        return `${segments[0]}/${segments[1]}`;
+      }
+      return segments[0] || raw;
+    } catch {
+      return raw;
+    }
+  }
+  return raw;
+}
+
+function stripRouteGroup(segment) {
+  if (segment.startsWith('(') && segment.endsWith(')')) {
+    return '';
+  }
+  return segment;
+}
+
+function convertDynamicSegment(segment) {
+  const match = segment.match(/^\[(\.\.\.)?([^\]]+)\]$/);
+  if (!match) {
+    return segment;
+  }
+  const isCatchAll = Boolean(match[1]);
+  const name = match[2];
+  return isCatchAll ? `*${name}` : `:${name}`;
+}
+
+function deriveRouteFromPath(relativePath) {
+  const unixPath = relativePath.replace(/\\/g, '/');
+  if (/^app\//.test(unixPath)) {
+    const inner = unixPath.replace(/^app\//, '').replace(/\/page\.[^/]+$/i, '');
+    const segments = inner
+      .split('/')
+      .map(stripRouteGroup)
+      .filter(Boolean)
+      .map(convertDynamicSegment);
+    return `/${segments.join('/')}`.replace(/\/+/g, '/');
+  }
+  if (/^pages\//.test(unixPath)) {
+    const inner = unixPath.replace(/^pages\//, '').replace(/\.[^/.]+$/, '');
+    const segments = inner.split('/').map(convertDynamicSegment);
+    return `/${segments.join('/')}`.replace(/\/+/g, '/');
+  }
+  if (/^(templates|resources\/views)\//.test(unixPath)) {
+    return `/${unixPath.replace(/^(templates|resources\/views)\//, '').replace(/\.[^/.]+$/, '')}`;
+  }
+  if (/^src\/routes\//.test(unixPath)) {
+    return `/${unixPath.replace(/^src\/routes\//, '').replace(/\.[^/.]+$/, '')}`;
+  }
+  return `/${unixPath.replace(/\.[^/.]+$/, '')}`;
+}
+
+function detectScreenPattern(relativePath) {
+  const unixPath = relativePath.replace(/\\/g, '/');
+  if (/^app\/.+\/page\.(js|jsx|ts|tsx|mdx)$/i.test(unixPath)) {
+    return 'next-app-router';
+  }
+  if (/^pages\/.+\.(js|jsx|ts|tsx)$/i.test(unixPath)) {
+    return 'next-pages';
+  }
+  if (/^(templates|resources\/views)\/.+\.(php|blade\.php|twig)$/i.test(unixPath)) {
+    return 'template';
+  }
+  if (/^src\/routes\/.+\.(js|jsx|ts|tsx)$/i.test(unixPath)) {
+    return 'react-route';
+  }
+  if (/\/public\/.+\.php$/i.test(unixPath)) {
+    return 'php-public';
+  }
+  return 'generic';
+}
+
+function isScreenCandidate(relativePath) {
+  const unixPath = relativePath.replace(/\\/g, '/');
+  return (
+    /^app\/.+\/page\.(js|jsx|ts|tsx|mdx)$/i.test(unixPath) ||
+    /^pages\/.+\.(js|jsx|ts|tsx)$/i.test(unixPath) ||
+    /^(templates|resources\/views)\/.+\.(php|blade\.php|twig)$/i.test(unixPath) ||
+    /^src\/routes\/.+\.(js|jsx|ts|tsx)$/i.test(unixPath) ||
+    /\/public\/.+\.php$/i.test(unixPath)
+  );
+}
+
+function assignFramePositions(frames) {
+  const columns = Math.max(1, Math.ceil(Math.sqrt(frames.length)));
+  const gapX = 480;
+  const gapY = 360;
+  return frames.map((frame, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    return {
+      ...frame,
+      position: { x: column * gapX, y: row * gapY }
+    };
+  });
+}
+
+function collectScreenCandidates(limit = 24, strategy = 'routes_first', rootDir = process.cwd()) {
+  const results = [];
+  function walk(currentDir, relative = '') {
+    if (results.length >= limit) {
+      return;
+    }
+    let entries;
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        if (SCREEN_IGNORES.has(entry.name)) {
+          continue;
+        }
+        walk(
+          path.join(currentDir, entry.name),
+          relative ? `${relative}/${entry.name}` : entry.name
+        );
+      } else if (entry.isFile()) {
+        const relativePath = relative ? `${relative}/${entry.name}` : entry.name;
+        if (isScreenCandidate(relativePath)) {
+          const route = deriveRouteFromPath(relativePath);
+          const frameName = route === '/' ? 'home' : route.replace(/^\//, '');
+          results.push({
+            frame_name: frameName || relativePath,
+            route,
+            source_path: relativePath,
+            pattern: detectScreenPattern(relativePath)
+          });
+          if (results.length >= limit) {
+            return;
+          }
+        }
+      }
+    }
+  }
+  walk(rootDir, '');
+  return assignFramePositions(results);
+}
+
+function buildFigmaCommentMessage({ pageName, frames, runId, repoRef }) {
+  const header = `Hub Bootstrap "${pageName}" (run: ${runId}${repoRef ? ` / ${repoRef}` : ''})`;
+  const lines = frames.slice(0, 10).map(
+    (frame) => `• ${frame.route} (${frame.source_path}) [${frame.pattern}]`
+  );
+  if (frames.length > 10) {
+    lines.push(`… and ${frames.length - 10} more`);
+  }
+  return `${header}\nFrames:\n${lines.join('\n')}`;
+}
+
+function resolveRepoRoot(repoLocalPath) {
+  const resolved = repoLocalPath ? path.resolve(repoLocalPath) : process.cwd();
+  if (!repoLocalPath) {
+    return resolved;
+  }
+  let stats;
+  try {
+    stats = fs.statSync(resolved);
+  } catch (error) {
+    throw new Error(
+      `repo_local_path "${repoLocalPath}" のディレクトリが見つかりません (root=${resolved}, patterns=${SCREEN_PATTERNS_DESCRIPTION})`
+    );
+  }
+  if (!stats.isDirectory()) {
+    throw new Error(
+      `repo_local_path "${repoLocalPath}" はディレクトリではありません (root=${resolved}, patterns=${SCREEN_PATTERNS_DESCRIPTION})`
+    );
+  }
+  return resolved;
+}
+
+function normalizeManualFrames(manualFrames = []) {
+  return manualFrames
+    .map((entry, index) => {
+      if (!entry) {
+        return null;
+      }
+      const name = entry.name || entry.frame_name || entry.route || `Frame ${index + 1}`;
+      return {
+        ...entry,
+        frame_name: entry.frame_name || name,
+        name,
+        route: entry.route || `manual-${index + 1}`,
+        source_path: entry.source_path || '(manual)',
+        pattern: entry.pattern || 'manual'
+      };
+    })
+    .filter(Boolean);
+}
+
+function ensureFramePositions(frames = []) {
+  const fallback = assignFramePositions(frames);
+  return frames.map((frame, index) => {
+    const hasPosition =
+      frame &&
+      frame.position &&
+      typeof frame.position.x === 'number' &&
+      typeof frame.position.y === 'number';
+    if (hasPosition) {
+      return frame;
+    }
+    return {
+      ...frame,
+      position: fallback[index] ? fallback[index].position : { x: index * 40, y: index * 40 }
+    };
+  });
+}
+
 function applyDocsInstruction(docPath, instruction) {
   const absolute = path.join(process.cwd(), docPath);
   if (!fs.existsSync(absolute)) {
@@ -252,6 +527,279 @@ async function executeRepoPatchJob(jobPayload) {
       logs: ['repo_patch failed']
     };
     return finalizeRun(runPaths, job, result, createdAt);
+  }
+}
+
+async function executeFigmaBootstrapJob(jobPayload) {
+  const job = cloneJob(jobPayload);
+  const runId = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+  const runPaths = ensureRunDirectory(runId);
+  recordRunStart(runPaths, job);
+  const createdAt = new Date().toISOString();
+
+  const planRelativePath = `.ai-runs/${runId}/figma_bootstrap_plan.json`;
+  const planAbsolutePath = path.join(process.cwd(), planRelativePath);
+  const nodesRelativePath = `.ai-runs/${runId}/figma_bootstrap_nodes.json`;
+  const planState = {
+    schema_version: SCHEMA_VERSION,
+    job_type: job.job_type,
+    run_id: runId,
+    started_at: createdAt,
+    status: 'pending',
+    page_name: job.inputs.page_name || 'Hub Bootstrap',
+    repo_reference: null,
+    repo_root: job.inputs.repo_local_path ? path.resolve(job.inputs.repo_local_path) : process.cwd(),
+    figma_file_key: null,
+    screen_patterns: SCREEN_PATTERN_LIST.slice(),
+    frames: [],
+    frame_source: null,
+    errors: []
+  };
+  const writePlan = () => {
+    planState.updated_at = new Date().toISOString();
+    try {
+      fs.writeFileSync(planAbsolutePath, JSON.stringify(planState, null, 2));
+    } catch (error) {
+      console.error(`[figma-plan] write failed: ${error.message}`);
+    }
+  };
+  writePlan();
+
+  const annotateError = (error, where, meta = {}) => {
+    const baseError = error instanceof Error ? error : new Error(String(error));
+    if (!baseError.planWhere) {
+      baseError.planWhere = where;
+    }
+    if (!baseError.planCode) {
+      baseError.planCode = baseError.code || 'ERR';
+    }
+    baseError.planMeta = { ...(baseError.planMeta || {}), ...meta };
+    return baseError;
+  };
+
+  const baseLogs = [`plan_path=${planRelativePath}`, `screen patterns=${SCREEN_PATTERNS_DESCRIPTION}`];
+  let requestedPlanTarget = null;
+  let frameSource = 'scan';
+
+  try {
+    const validation = validateJob(job);
+    if (!validation.ok) {
+      throw annotateError(
+        new Error(validation.errors[0] || 'job validation failed'),
+        'preflight',
+        { errors: validation.errors }
+      );
+    }
+    planState.status = 'running';
+
+    const targetTemplate = job.inputs.target_path || '.ai-runs/{{run_id}}/figma_bootstrap_plan.json';
+    try {
+      requestedPlanTarget = resolveTargetPath(targetTemplate, runId);
+      planState.requested_target = requestedPlanTarget;
+    } catch (error) {
+      throw annotateError(error, 'constraints', { target_template: targetTemplate });
+    }
+    try {
+      ensureAllowedPath(
+        requestedPlanTarget,
+        job.constraints && job.constraints.allowed_paths ? job.constraints.allowed_paths : []
+      );
+    } catch (error) {
+      throw annotateError(error, 'constraints', {
+        allowed_paths: job.constraints ? job.constraints.allowed_paths : null
+      });
+    }
+
+    const repoRef =
+      normalizeRepoReference(job.inputs.repo_url || job.inputs.repo || job.inputs.owner_repo) ||
+      normalizeRepoReference(job.inputs.repository);
+    if (!repoRef) {
+      throw annotateError(
+        new Error('repo_url (owner/repo) を inputs に指定してください'),
+        'preflight'
+      );
+    }
+    planState.repo_reference = repoRef;
+
+    const figmaInput = job.inputs.figma_design_url || job.inputs.figma_file_key;
+    const fileKey = extractFigmaFileKey(figmaInput);
+    planState.figma_file_key = fileKey;
+
+    const figmaToken = (job.inputs.figma_token || process.env.FIGMA_TOKEN || '').trim();
+    const hasFigmaToken = Boolean(figmaToken);
+
+    try {
+      const resolvedRoot = resolveRepoRoot(job.inputs.repo_local_path);
+      planState.repo_root = resolvedRoot;
+    } catch (error) {
+      throw annotateError(error, 'resolveRepoRoot', { repo_local_path: job.inputs.repo_local_path });
+    }
+
+    const strategy = job.inputs.strategy || 'routes_first';
+    baseLogs.push(`screen root=${planState.repo_root}`);
+    baseLogs.push(`figma file_key=${fileKey}`);
+    baseLogs.push(`repo=${repoRef}`);
+    baseLogs.push(`screen strategy=${strategy}`);
+    baseLogs.push(`figma_api=${hasFigmaToken ? 'enabled' : 'skipped'}`);
+
+    let frames = [];
+    if (Array.isArray(job.inputs.frames)) {
+      const manualFrames = ensureFramePositions(normalizeManualFrames(job.inputs.frames));
+      if (manualFrames.length) {
+        frames = manualFrames;
+        frameSource = 'manual-input';
+      } else {
+        frames = ensureFramePositions(
+          normalizeManualFrames([
+            { name: 'Bootstrap', source_path: '(manual)', route: '/', pattern: 'manual' }
+          ])
+        );
+        frameSource = 'manual-default';
+      }
+    } else {
+      frames = collectScreenCandidates(24, strategy, planState.repo_root);
+      if (!frames.length) {
+        frames = ensureFramePositions(
+          normalizeManualFrames([
+            { name: 'Bootstrap', source_path: '(manual)', route: '/', pattern: 'manual' }
+          ])
+        );
+        frameSource = 'manual-default';
+      }
+    }
+    planState.frames = frames;
+    planState.frame_source = frameSource;
+
+    writeJsonArtifact(nodesRelativePath, {
+      run_id: runId,
+      repo_reference: repoRef,
+      repo_root: planState.repo_root,
+      figma_file_key: fileKey,
+      nodes: [],
+      recorded_at: null
+    });
+    let commentId = 'skipped-no-token';
+    if (hasFigmaToken) {
+      try {
+        const fileMetaResponse = await callFigmaApi({
+          token: figmaToken,
+          method: 'GET',
+          endpoint: `/files/${fileKey}`
+        });
+        const fileLog = formatFigmaRequestLog('file_meta', fileMetaResponse.debug);
+        if (fileLog) {
+          baseLogs.push(fileLog);
+        }
+      } catch (infoError) {
+        if (infoError.debug) {
+          const debugLog = formatFigmaRequestLog('file_meta', infoError.debug);
+          if (debugLog) {
+            baseLogs.push(debugLog);
+          }
+        }
+        baseLogs.push(`figma_info_error[file_meta]=${infoError.message}`);
+      }
+      const commentMessage = buildFigmaCommentMessage({
+        pageName: planState.page_name,
+        frames,
+        runId,
+        repoRef
+      });
+      let commentData;
+      try {
+        const commentResponse = await callFigmaApi({
+          token: figmaToken,
+          method: 'POST',
+          endpoint: `/files/${fileKey}/comments`,
+          body: {
+            message: commentMessage,
+            client_meta: { x: 0, y: 0 }
+          }
+        });
+        const commentLog = formatFigmaRequestLog('comment', commentResponse.debug);
+        if (commentLog) {
+          baseLogs.push(commentLog);
+        }
+        commentData = commentResponse.data;
+      } catch (commentError) {
+        if (commentError.debug) {
+          const debugLog = formatFigmaRequestLog('comment', commentError.debug);
+          if (debugLog) {
+            baseLogs.push(debugLog);
+          }
+        }
+        baseLogs.push(`figma_info_error[comment]=${commentError.message}`);
+        throw commentError;
+      }
+      commentId =
+        (commentData && (commentData.id || (commentData.comment && commentData.comment.id))) ||
+        'unknown';
+    }
+    planState.comment_id = commentId;
+    planState.status = 'ok';
+    planState.completed_at = new Date().toISOString();
+    writePlan();
+
+    if (
+      requestedPlanTarget &&
+      requestedPlanTarget !== planRelativePath &&
+      requestedPlanTarget.startsWith('.ai-runs/')
+    ) {
+      try {
+        const absoluteTarget = path.join(process.cwd(), requestedPlanTarget);
+        fs.mkdirSync(path.dirname(absoluteTarget), { recursive: true });
+        fs.writeFileSync(absoluteTarget, JSON.stringify(planState, null, 2));
+      } catch (copyError) {
+        baseLogs.push(`plan_copy_error=${copyError.message}`);
+      }
+    }
+
+    const result = {
+      status: 'ok',
+      artifacts: [
+        { path: planRelativePath, kind: 'json' },
+        { path: nodesRelativePath, kind: 'json' }
+      ],
+      diff_summary: `Figma bootstrap planned (${frames.length} frames)`,
+      checks: [
+        { id: 'figma_comment', ok: true, reason: `comment_id=${commentId}` },
+        { id: 'repo_routes', ok: true, reason: `${frames.length} screen candidates` }
+      ],
+      logs: [
+        ...baseLogs,
+        `frames_source=${frameSource}`,
+        `frames_count=${frames.length}`,
+        `comment_id=${commentId}`
+      ]
+    };
+    return finalizeRun(runPaths, job, result, createdAt);
+  } catch (error) {
+    const where = error.planWhere || 'unknown';
+    const failureMessage = error.message || 'figma bootstrap failed';
+    const failureReason = `${failureMessage} (where=${where}, root=${planState.repo_root}, patterns=${SCREEN_PATTERNS_DESCRIPTION})`;
+    planState.status = 'error';
+    planState.failed_at = new Date().toISOString();
+    planState.errors.push({
+      code: error.planCode || error.code || 'ERR',
+      where,
+      message: failureMessage,
+      root: planState.repo_root,
+      patterns: planState.screen_patterns,
+      meta: error.planMeta || {},
+      stack: error.stack ? error.stack.split('\n').slice(0, 6).join('\n') : undefined
+    });
+    writePlan();
+    const result = {
+      status: 'error',
+      errors: [failureReason],
+      checks: [{ id: 'figma_bootstrap', ok: false, reason: failureReason }],
+      logs: baseLogs.length
+        ? [...baseLogs, `failure_reason=${failureReason}`, 'figma bootstrap failed']
+        : ['figma bootstrap failed']
+    };
+    return finalizeRun(runPaths, job, result, createdAt);
+  } finally {
+    writePlan();
   }
 }
 
@@ -596,6 +1144,7 @@ async function main() {
     ]);
     return;
   }
+  applyCodexPrompt(jobPayload, { lang: jobPayload && jobPayload.output_language });
   const validation = validateJob(jobPayload);
   if (!validation.ok) {
     const reason = `ジョブ定義エラー: ${validation.errors[0] || '不明なエラー'}`;
@@ -610,6 +1159,8 @@ async function main() {
     result = await executeRepoPatchJob(jobPayload);
   } else if (jobType === 'integration_hub.phase2.diagnostics') {
     result = await executeDiagnosticsJob(jobPayload);
+  } else if (jobType === 'integration_hub.phase2.figma_bootstrap_from_repo') {
+    result = await executeFigmaBootstrapJob(jobPayload);
   } else {
     result = await executeMcpJob(jobPayload, role);
   }

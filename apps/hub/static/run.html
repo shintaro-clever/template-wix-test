@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Run Detail</title>
+    <style>
+      :root {
+        font-family: 'Inter', system-ui, sans-serif;
+        color: #0f172a;
+        background: #f8fafc;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        background: #f8fafc;
+      }
+      header {
+        background: #0f172a;
+        color: #fff;
+        padding: 1.5rem;
+      }
+      header a {
+        color: #93c5fd;
+        text-decoration: none;
+      }
+      main {
+        max-width: 960px;
+        margin: 2rem auto;
+        padding: 0 1.5rem 3rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+      .card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 25px 45px rgba(15, 23, 42, 0.08);
+      }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 1rem;
+      }
+      .summary-item {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 1rem;
+      }
+      pre {
+        background: #0f172a;
+        color: #f8fafc;
+        padding: 1rem;
+        border-radius: 12px;
+        overflow-x: auto;
+      }
+      ul.artifacts {
+        list-style: none;
+        padding-left: 0;
+      }
+      ul.artifacts li {
+        margin-bottom: 0.35rem;
+      }
+      .note {
+        font-size: 0.9rem;
+        color: #475569;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/runs">← Runs 一覧に戻る</a>
+      <h1 id="runTitle">Run Detail</h1>
+    </header>
+    <main>
+      <section class="card" id="summaryCard">
+        <div class="summary-grid">
+          <div class="summary-item">
+            <strong>run_id</strong>
+            <div id="summaryRunId">-</div>
+          </div>
+          <div class="summary-item">
+            <strong>job_type</strong>
+            <div id="summaryJobType">-</div>
+          </div>
+          <div class="summary-item">
+            <strong>Status</strong>
+            <div id="summaryStatus">-</div>
+          </div>
+          <div class="summary-item">
+            <strong>Created</strong>
+            <div id="summaryCreated">-</div>
+          </div>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Artifacts</h2>
+        <ul class="artifacts" id="artifactList"></ul>
+        <p class="note">Artifacts は run.json 内のパスを参照してリンクを生成しています。</p>
+      </section>
+      <section class="card">
+        <h2>Bootstrap Plan</h2>
+        <pre id="planJson">-</pre>
+      </section>
+      <section class="card">
+        <h2>Bootstrap Nodes</h2>
+        <pre id="nodesJson">-</pre>
+      </section>
+      <section class="card">
+        <h2>Audit (RUN_END)</h2>
+        <pre id="auditPreview">-</pre>
+      </section>
+      <section class="card">
+        <h2>run.json</h2>
+        <details>
+          <summary>Raw JSON を表示</summary>
+          <pre id="runJson"></pre>
+        </details>
+      </section>
+    </main>
+    <script>
+      const runId = window.location.pathname.replace(/\/$/, '').split('/').filter(Boolean).pop();
+      const runJsonEl = document.getElementById('runJson');
+      const auditPreviewEl = document.getElementById('auditPreview');
+      const artifactList = document.getElementById('artifactList');
+      const planJsonEl = document.getElementById('planJson');
+      const nodesJsonEl = document.getElementById('nodesJson');
+
+      function setSummary(detail) {
+        document.getElementById('runTitle').textContent = `Run: ${detail.run_id}`;
+        document.getElementById('summaryRunId').textContent = detail.run_id;
+        document.getElementById('summaryJobType').textContent = detail.job_type;
+        document.getElementById('summaryStatus').textContent = detail.status;
+        document.getElementById('summaryCreated').textContent = detail.created_at || '-';
+      }
+
+      function renderArtifacts(runId, artifacts) {
+        artifactList.innerHTML = '';
+        if (!artifacts || !artifacts.length) {
+          const li = document.createElement('li');
+          li.textContent = '-';
+          artifactList.appendChild(li);
+          return;
+        }
+        artifacts.forEach((path) => {
+          const li = document.createElement('li');
+          const link = document.createElement('a');
+          link.href = `/runs/${runId}/artifact?path=${encodeURIComponent(path)}`;
+          link.textContent = path;
+          link.target = '_blank';
+          li.appendChild(link);
+          artifactList.appendChild(li);
+        });
+      }
+
+      function renderAudit(audit) {
+        if (!audit) {
+          auditPreviewEl.textContent = '-';
+          return;
+        }
+        auditPreviewEl.textContent = JSON.stringify(audit, null, 2);
+      }
+
+      function renderPlan(plan) {
+        if (!plan) {
+          planJsonEl.textContent = '-';
+          return;
+        }
+        planJsonEl.textContent = JSON.stringify(plan, null, 2);
+      }
+
+      function renderNodes(nodes) {
+        if (!nodes) {
+          nodesJsonEl.textContent = '-';
+          return;
+        }
+        nodesJsonEl.textContent = JSON.stringify(nodes, null, 2);
+      }
+
+      async function loadRun() {
+        try {
+          const res = await fetch(`/api/runs/${runId}`);
+          if (!res.ok) throw new Error('Failed to load run');
+          const detail = await res.json();
+          setSummary(detail);
+          renderArtifacts(runId, detail.artifacts);
+          renderAudit(detail.audit_tail);
+          renderPlan(detail.figma_bootstrap_plan);
+          renderNodes(detail.figma_bootstrap_nodes);
+          runJsonEl.textContent = JSON.stringify(detail.run_json, null, 2);
+        } catch (error) {
+          console.error(error);
+          runJsonEl.textContent = 'Run 情報の取得に失敗しました。';
+          auditPreviewEl.textContent = '-';
+          planJsonEl.textContent = '-';
+          nodesJsonEl.textContent = '-';
+        }
+      }
+
+      loadRun();
+    </script>
+  </body>
+</html>
