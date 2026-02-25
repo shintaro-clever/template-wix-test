@@ -46,8 +46,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
-      - name: Install (minimal)
-        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Install
+        run: npm install --no-audit --no-fund
       - name: Selftest
         run: npm test
 
@@ -60,7 +60,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22.22.0
-      - name: Install (minimal)
-        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Install
+        run: npm install --no-audit --no-fund
       - name: E2E basic
         run: node scripts/run-job.js --job scripts/sample-job.mcp.offline.smoke.json --role operator
