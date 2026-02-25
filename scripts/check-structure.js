@@ -50,12 +50,20 @@ function checkCommandsFrontmatter() {
     if (!entry.isFile() || !entry.name.endsWith(".md")) {
       continue;
     }
+    if (entry.name === "_TEMPLATE.md") {
+      continue;
+    }
     const relPath = path.join("agents/commands", entry.name);
     const absPath = path.join(ROOT, relPath);
     const content = fs.readFileSync(absPath, "utf8");
-    const firstToken = content.trimStart().slice(0, 3);
-    if (firstToken !== "---") {
-      errors.push(`missing frontmatter start in: ${relPath}`);
+    const match = content.match(/^---\s*\n([\s\S]*?)\n---\s*(\n|$)/);
+    if (!match) {
+      errors.push(`missing frontmatter block in: ${relPath}`);
+      continue;
+    }
+    const frontmatterBody = match[1];
+    if (!/^\s*description\s*:\s*.+$/m.test(frontmatterBody)) {
+      errors.push(`missing required frontmatter field "description" in: ${relPath}`);
     }
   }
 }
