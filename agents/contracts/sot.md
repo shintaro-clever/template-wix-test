@@ -11,3 +11,4 @@
 - 実行可能な成果物は `agents/skills` に置く。
 - 同一内容を複数 SoT に重複記載しない。
 - 迷った場合は SoT 側を正として参照先のみ更新する。
+- escalation 契約は `agents/contracts/network-escalation.md` を参照する。

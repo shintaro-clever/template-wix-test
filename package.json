@@ -6,7 +6,8 @@
     "start": "node src/server/server.js",
     "test": "node scripts/selftest.js",
     "cleanup:runs": "node scripts/cleanup-runs.js",
-    "check:structure": "node scripts/check-structure.js"
+    "check:structure": "node scripts/check-structure.js",
+    "check:sot-dup": "node scripts/check-sot-dup.js"
   },
   "dependencies": {
     "better-sqlite3": "^12.6.2",
