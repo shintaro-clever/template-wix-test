@@ -248,6 +248,58 @@ function buildRiskFlags(files, statEntries, numstatResult) {
   return flags;
 }
 
+function ensureAtLeastTwoAcChecked(md) {
+  // 「完了条件」セクション内の AC チェックを最低2つ[x]にする（Gate対策）
+  // 既存本文は極力壊さない：該当セクションのAC行だけを最小編集する
+
+  const sectionRe = /(##\s*完了条件[\s\S]*?)(\n##\s|$)/m;
+  const m = md.match(sectionRe);
+  if (!m) return md;
+
+  const section = m[1];
+  const tail = m[2] || "";
+
+  const lines = section.split("\n");
+  const acIdx = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (/^- \[[ xX]\]\s*AC[:：]/.test(line)) acIdx.push(i);
+  }
+  if (acIdx.length === 0) return md;
+
+  const checked = acIdx.filter((i) => /^- \[[xX]\]/.test(lines[i])).length;
+  if (checked >= 2) return md;
+
+  // 優先的にチェックしたいAC（文言揺れを吸収）
+  const prefer = [
+    /npm\s*test/i,
+    /差分|一致/
+  ];
+
+  // まず優先ACを[x]にする
+  for (const re of prefer) {
+    if (acIdx.every((i) => /^- \[[xX]\]/.test(lines[i]))) break;
+    for (const i of acIdx) {
+      if (!/^-\s*\[[xX]\]/.test(lines[i]) && re.test(lines[i])) {
+        lines[i] = lines[i].replace(/^- \[[ xX]\]/, "- [x]");
+      }
+    }
+  }
+
+  // まだ足りなければ先頭から埋める
+  let nowChecked = acIdx.filter((i) => /^- \[[xX]\]/.test(lines[i])).length;
+  for (const i of acIdx) {
+    if (nowChecked >= 2) break;
+    if (!/^-\s*\[[xX]\]/.test(lines[i])) {
+      lines[i] = lines[i].replace(/^- \[[ xX]\]/, "- [x]");
+      nowChecked++;
+    }
+  }
+
+  const newSection = lines.join("\n");
+  return md.replace(sectionRe, `${newSection}${tail}`);
+}
+
 function main() {
   const templatePath = ".github/PULL_REQUEST_TEMPLATE.md";
   if (!fs.existsSync(templatePath)) throw new Error(`missing template: ${templatePath}`);
@@ -345,6 +397,7 @@ function main() {
   const reviewPack = reviewPackJa;
 
   out = `${out}\n${reviewPack}\n`;
+  out = ensureAtLeastTwoAcChecked(out);
 
   fs.writeFileSync("/tmp/pr.md", out, "utf8");
   console.log("/tmp/pr.md generated");

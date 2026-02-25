@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const https = require('https');
 
 function runCommand(cmd, args, options = {}) {
   const result = spawnSync(cmd, args, {
@@ -21,14 +22,50 @@ function runCommand(cmd, args, options = {}) {
   };
 }
 
-function checkNetwork() {
-  const res = runCommand('curl', ['-fsSI', '-o', '/dev/null', 'https://github.com']);
-  const status = res.ok ? 'NET_OK' : 'NET_NG';
+function classifyNetworkError(error) {
+  const code = error && error.code ? String(error.code) : '';
+  if (['EPERM', 'EACCES', 'ENOENT'].includes(code)) {
+    return { status: 'CHECK_BLOCKED', detail: code };
+  }
+  if (['EAI_AGAIN', 'ENOTFOUND', 'EAI_FAIL'].includes(code)) {
+    return { status: 'CHECK_DNS_NG', detail: code };
+  }
   return {
-    status,
-    ok: res.ok,
-    detail: res.ok ? null : res.error || res.stderr || `curl exit ${res.status}`
+    status: 'CHECK_NET_NG',
+    detail: code || (error && error.message ? error.message : String(error))
   };
+}
+
+function checkNetwork() {
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        method: 'HEAD',
+        hostname: 'github.com',
+        path: '/',
+        timeout: 5000
+      },
+      (res) => {
+        res.resume();
+        const ok = res.statusCode >= 200 && res.statusCode < 400;
+        resolve({
+          status: ok ? 'CHECK_OK' : 'CHECK_NET_NG',
+          ok,
+          detail: ok ? null : `HTTP ${res.statusCode}`
+        });
+      }
+    );
+    req.on('timeout', () => req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
+    req.on('error', (error) => {
+      const classified = classifyNetworkError(error);
+      resolve({
+        status: classified.status,
+        ok: false,
+        detail: classified.detail
+      });
+    });
+    req.end();
+  });
 }
 
 function checkVersion(cmd, args) {
@@ -68,9 +105,9 @@ function parseNodeModuleVersions(message) {
   return { required: null, found: null };
 }
 
-function main() {
+async function main() {
   const cwd = process.cwd();
-  const network = checkNetwork();
+  const network = await checkNetwork();
   const nodeVersion = checkVersion('node', ['-v']);
   const npmVersion = checkVersion('npm', ['-v']);
   const nodeModules = checkVersion('node', ['-p', 'process.versions.modules']);
@@ -123,7 +160,15 @@ function main() {
   lines.push(`NET: ${network.status}`);
   if (!network.ok && network.detail) {
     lines.push(`NET detail: ${network.detail}`);
-    lines.push('NET_NG: git/gh operations are prohibited.');
+    if (network.status === 'CHECK_DNS_NG') {
+      lines.push('CHECK_DNS_NG: DNS failure. git/gh operations are prohibited.');
+      lines.push('Recovery: bash scripts/fix-dns.sh');
+    } else if (network.status === 'CHECK_BLOCKED') {
+      lines.push('CHECK_BLOCKED: Network check blocked. git/gh operations are prohibited.');
+      lines.push('Recovery: check container permissions / network policy.');
+    } else {
+      lines.push('CHECK_NET_NG: git/gh operations are prohibited.');
+    }
   }
   lines.push(`node: ${nodeVersion.ok ? nodeVersion.version : 'NG'}`);
   if (!nodeVersion.ok && nodeVersion.detail) {
@@ -143,4 +188,8 @@ function main() {
   process.stdout.write(lines.join('\n') + '\n');
 }
 
-main();
+main().catch((error) => {
+  const message = error && error.message ? error.message : String(error);
+  process.stderr.write(`[hub-doctor] FAILED: ${message}\n`);
+  process.exit(1);
+});

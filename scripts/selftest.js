@@ -588,7 +588,10 @@ function verifyHubDoctor() {
   assert(fs.existsSync(outputPath), 'doctor.json missing after hub-doctor.js');
   const payload = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
   assert(payload && payload.network && payload.versions, 'doctor.json missing required fields');
-  assert(payload.network.status === 'NET_OK' || payload.network.status === 'NET_NG', 'invalid network status');
+  assert(
+    ['CHECK_OK', 'CHECK_NET_NG', 'CHECK_DNS_NG', 'CHECK_BLOCKED'].includes(payload.network.status),
+    'invalid network status'
+  );
   assert(payload.versions.node && payload.versions.npm, 'doctor.json missing version entries');
   assert(payload.native && payload.native.better_sqlite3, 'doctor.json missing native.better_sqlite3');
   assert(

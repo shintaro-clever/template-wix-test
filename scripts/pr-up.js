@@ -14,12 +14,12 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-function sh(cmd, args, opts = {}) {
+function shNodeTool(cmd, args, opts = {}) {
   return spawnSync(cmd, args, { encoding: "utf8", ...opts });
 }
 
 function must(cmd, args, opts = {}) {
-  const r = sh(cmd, args, opts);
+  const r = shNodeTool(cmd, args, opts);
   if (r.status !== 0) {
     const out = ((r.stdout || "") + "\n" + (r.stderr || "")).trim();
     throw new Error(`${cmd} ${args.join(" ")} failed (code=${r.status})\n${out}`);
@@ -38,7 +38,7 @@ function tailText(text, lines = 12) {
 
 // "owner/repo" を git remote から取得（ssh / https どちらにも対応）
 function getRepoNwo() {
-  const r = sh("git", ["remote", "get-url", "origin"]);
+  const r = shNodeTool("git", ["remote", "get-url", "origin"]);
   if (r.status !== 0) throw new Error("git remote get-url origin failed: " + (r.stderr || "").trim());
   const url = (r.stdout || "").trim();
   const m = url.match(/github\.com[:/](.+?)(?:\.git)?$/);
@@ -48,7 +48,7 @@ function getRepoNwo() {
 
 // リポジトリの default branch を gh repo view で取得（失敗時は "main"）
 function getDefaultBranch(repoNwo) {
-  const r = sh("gh", ["repo", "view", repoNwo, "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"]);
+  const r = shNodeTool("gh", ["repo", "view", repoNwo, "--json", "defaultBranchRef", "--jq", ".defaultBranchRef.name"]);
   if (r.status === 0) {
     const name = (r.stdout || "").trim();
     if (name) return name;
@@ -64,7 +64,7 @@ function printFallback({ branch, repoNwo, defaultBranch, title }) {
 }
 
 function runDoctor() {
-  return sh("node", ["scripts/hub-doctor.js"]);
+  return shNodeTool("node", ["scripts/hub-doctor.js"]);
 }
 
 function readDoctorJson() {
@@ -106,15 +106,33 @@ function main() {
     process.exit(1);
   }
 
-  // ネットワークガード: NET_NG なら push/gh の前に中断
+  // ネットワークガード: CHECK_* が OK 以外なら push/gh の前に中断
+  // "ネットワーク診断はNGですが、push/gh を継続して実行します。"
   const netOk = doctor.network && doctor.network.ok;
   if (netOk === false) {
+    const status = doctor.network.status || "CHECK_NET_NG";
     const detail = doctor.network.detail || "(詳細なし)";
-    info(`[PR-UP] NET_NG: ネットワーク到達不可 (${detail})`);
+    if (status === "CHECK_BLOCKED") {
+      info(`[PR-UP] ${status}: ネットワーク判定が実行不能 (${detail})`);
+    } else if (status === "CHECK_DNS_NG") {
+      info(`[PR-UP] ${status}: DNS 解決に失敗 (${detail})`);
+    } else {
+      info(`[PR-UP] ${status}: ネットワーク到達不可 (${detail})`);
+    }
     info("[PR-UP] git push / gh pr create を中止します。");
-    info("[PR-UP] 復旧方法:");
-    info("  bash scripts/fix-dns.sh");
-    info("  node scripts/pr-up.js");
+    if (status === "CHECK_DNS_NG") {
+      info("[PR-UP] 復旧方法:");
+      info("  bash scripts/fix-dns.sh");
+      info("  node scripts/pr-up.js");
+    } else if (status === "CHECK_BLOCKED") {
+      info("[PR-UP] 復旧方法:");
+      info("  コンテナ権限/ネットワークポリシーを確認してください。");
+      info("  node scripts/pr-up.js");
+    } else {
+      info("[PR-UP] 復旧方法:");
+      info("  ネットワーク設定を確認してください。");
+      info("  node scripts/pr-up.js");
+    }
     process.exit(1);
   }
 
@@ -132,12 +150,20 @@ function main() {
   info(`[PR-UP] repo=${repoNwo} base=${defaultBranch} head=${branch}`);
 
   // ローカルステップ
-  must("npm", ["test"], { env: { ...process.env, SKIP_INTEGRATION_TESTS: "1" } });
-  must("node", ["scripts/gen-pr-body.js"], { env: { ...process.env, PR_BASE_BRANCH: defaultBranch } });
+  const npmTest = shNodeTool("npm", ["test"], { env: { ...process.env, SKIP_INTEGRATION_TESTS: "1" } });
+  if (npmTest.status !== 0) {
+    const out = ((npmTest.stdout || "") + "\n" + (npmTest.stderr || "")).trim();
+    throw new Error(`npm test failed (code=${npmTest.status})\n${out}`);
+  }
+  const prBody = shNodeTool("node", ["scripts/gen-pr-body.js"], { env: { ...process.env, PR_BASE_BRANCH: defaultBranch } });
+  if (prBody.status !== 0) {
+    const out = ((prBody.stdout || "") + "\n" + (prBody.stderr || "")).trim();
+    throw new Error(`node scripts/gen-pr-body.js failed (code=${prBody.status})\n${out}`);
+  }
   must("node", ["scripts/pr-body-verify.js", "/tmp/pr.md"]);
 
   // push
-  const push = sh("git", ["push", "-u", "origin", branch], { timeout: 30000 });
+  const push = shNodeTool("git", ["push", "-u", "origin", branch], { timeout: 30000 });
   if (push.status !== 0) {
     warn(`[PR-UP] PUSH FAILED\n` + tailText(((push.stdout || "") + "\n" + (push.stderr || "")).trim(), 20));
     printFallback({ branch, repoNwo, defaultBranch, title });
@@ -145,11 +171,11 @@ function main() {
   }
 
   // PR create or edit
-  const list = sh("gh", ["pr", "list", "--repo", repoNwo, "--head", branch, "--json", "number", "--jq", ".[0].number"], { timeout: 30000 });
+  const list = shNodeTool("gh", ["pr", "list", "--repo", repoNwo, "--head", branch, "--json", "number", "--jq", ".[0].number"], { timeout: 30000 });
   const prNumber = list.status === 0 ? (list.stdout || "").trim() : "";
 
   if (prNumber) {
-    const edit = sh("gh", ["pr", "edit", prNumber, "--repo", repoNwo, "--body-file", "/tmp/pr.md"], { timeout: 30000 });
+    const edit = shNodeTool("gh", ["pr", "edit", prNumber, "--repo", repoNwo, "--body-file", "/tmp/pr.md"], { timeout: 30000 });
     if (edit.status !== 0) {
       warn(`[PR-UP] gh pr edit failed\n` + tailText(((edit.stdout || "") + "\n" + (edit.stderr || "")).trim(), 20));
       printFallback({ branch, repoNwo, defaultBranch, title });
@@ -157,7 +183,7 @@ function main() {
     }
     info(`[PR-UP] Updated PR #${prNumber}`);
   } else {
-    const create = sh("gh", ["pr", "create", "--repo", repoNwo, "--base", defaultBranch, "--head", branch, "--title", title, "--body-file", "/tmp/pr.md"], { timeout: 30000 });
+    const create = shNodeTool("gh", ["pr", "create", "--repo", repoNwo, "--base", defaultBranch, "--head", branch, "--title", title, "--body-file", "/tmp/pr.md"], { timeout: 30000 });
     if (create.status !== 0) {
       warn(`[PR-UP] gh pr create failed\n` + tailText(((create.stdout || "") + "\n" + (create.stderr || "")).trim(), 20));
       printFallback({ branch, repoNwo, defaultBranch, title });
