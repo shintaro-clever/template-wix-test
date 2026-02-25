@@ -62,6 +62,28 @@ function listRuns() {
   }
 }
 
+function snapshotRuns() {
+  const snapshot = {};
+  let entries = [];
+  try {
+    entries = fs.readdirSync(RUNS_ROOT);
+  } catch (error) {
+    return snapshot;
+  }
+  entries.forEach((name) => {
+    if (!name || name.startsWith('.')) return;
+    const fullPath = path.join(RUNS_ROOT, name);
+    let stat;
+    try {
+      stat = fs.statSync(fullPath);
+    } catch {
+      return;
+    }
+    snapshot[name] = { mtimeMs: stat.mtimeMs, isDir: stat.isDirectory() };
+  });
+  return snapshot;
+}
+
 function diffRuns(before, after) {
   const added = [];
   after.forEach((entry) => {
@@ -168,6 +190,7 @@ function runJob(jobPath, extraEnv = {}) {
 
 function runJobWithRunId(jobPath, extraEnv = {}) {
   const before = listRuns();
+  const beforeSnapshot = snapshotRuns();
   const result = spawnSync(process.execPath, ['scripts/run-job.js', '--job', jobPath, '--role', 'operator'], {
     encoding: 'utf8',
     timeout: 30000, // 30秒
@@ -189,7 +212,17 @@ function runJobWithRunId(jobPath, extraEnv = {}) {
     payload = JSON.parse(stdout);
   }
   const after = listRuns();
-  const newRuns = diffRuns(before, after);
+  const afterSnapshot = snapshotRuns();
+  let newRuns = diffRuns(before, after);
+  if (newRuns.length === 0) {
+    const candidates = Object.entries(afterSnapshot)
+      .filter(([, info]) => info && info.isDir)
+      .filter(([name, info]) => !beforeSnapshot[name] || info.mtimeMs > beforeSnapshot[name].mtimeMs)
+      .sort((a, b) => (b[1].mtimeMs || 0) - (a[1].mtimeMs || 0));
+    if (candidates.length > 0) {
+      newRuns = [candidates[0][0]];
+    }
+  }
   assert(newRuns.length === 1, 'run-job.js missing run directory (unexpected)');
   const runId = newRuns[0];
   if (!payload) {
