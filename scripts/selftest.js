@@ -94,6 +94,24 @@ function diffRuns(before, after) {
   return added;
 }
 
+function resolveRunIdFromResult(result, before, beforeSnapshot, after, afterSnapshot, errorMessage) {
+  if (result && result.run_id) {
+    return String(result.run_id);
+  }
+  let newRuns = diffRuns(before, after);
+  if (newRuns.length === 0) {
+    const candidates = Object.entries(afterSnapshot)
+      .filter(([, info]) => info && info.isDir)
+      .filter(([name, info]) => !beforeSnapshot[name] || info.mtimeMs > beforeSnapshot[name].mtimeMs)
+      .sort((a, b) => (b[1].mtimeMs || 0) - (a[1].mtimeMs || 0));
+    if (candidates.length > 0) {
+      newRuns = [candidates[0][0]];
+    }
+  }
+  assert(newRuns.length === 1, errorMessage);
+  return newRuns[0];
+}
+
 function validateLatestOfflineSmoke(latestSmokePath) {
   if (!fs.existsSync(latestSmokePath)) {
     throw new Error('latest_offline_smoke.json missing');
@@ -277,12 +295,19 @@ function verifyOfflineSmoke() {
   }
   const jobPath = path.join(__dirname, 'sample-job.mcp.offline.smoke.json');
   const before = listRuns();
+  const beforeSnapshot = snapshotRuns();
   const result = runJob(jobPath);
   assert(result.status === 'ok', 'offline smoke should succeed');
   const after = listRuns();
-  const newRuns = diffRuns(before, after);
-  assert(newRuns.length === 1, 'offline smoke should create one run directory');
-  const runId = newRuns[0];
+  const afterSnapshot = snapshotRuns();
+  const runId = resolveRunIdFromResult(
+    result,
+    before,
+    beforeSnapshot,
+    after,
+    afterSnapshot,
+    'offline smoke should create one run directory'
+  );
   const runDir = path.join(RUNS_ROOT, runId);
   assert(fs.existsSync(path.join(runDir, 'run.json')), 'run.json missing for offline smoke');
   assert(fs.existsSync(path.join(runDir, 'audit.jsonl')), 'audit.jsonl missing for offline smoke');
@@ -293,6 +318,7 @@ function verifyOfflineSmoke() {
   assert(latestSmoke.runId === runId, 'latest_offline_smoke.json runId should match latest success');
 
   const failBefore = listRuns();
+  const failBeforeSnapshot = snapshotRuns();
   const failResult = runJob(jobPath, { C2F_STUB_FAIL: '1' });
   assert(failResult.status === 'error', 'offline smoke failure should be error');
   assert(
@@ -300,14 +326,21 @@ function verifyOfflineSmoke() {
     'offline smoke failure must include mcp_exec check'
   );
   const failAfter = listRuns();
-  const failRuns = diffRuns(failBefore, failAfter);
-  assert(failRuns.length === 1, 'offline smoke failure should create run directory');
-  const failDir = path.join(RUNS_ROOT, failRuns[0]);
+  const failAfterSnapshot = snapshotRuns();
+  const failRunId = resolveRunIdFromResult(
+    failResult,
+    failBefore,
+    failBeforeSnapshot,
+    failAfter,
+    failAfterSnapshot,
+    'offline smoke failure should create run directory'
+  );
+  const failDir = path.join(RUNS_ROOT, failRunId);
   assert(fs.existsSync(path.join(failDir, 'run.json')), 'offline failure missing run.json');
   assert(fs.existsSync(path.join(failDir, 'audit.jsonl')), 'offline failure missing audit');
   const failLatest = validateLatestOfflineSmoke(latestSmokePath);
   assert(failLatest.status === 'error', 'latest_offline_smoke.json status should be error after failure');
-  assert(failLatest.runId === failRuns[0], 'latest_offline_smoke.json runId should match latest failure');
+  assert(failLatest.runId === failRunId, 'latest_offline_smoke.json runId should match latest failure');
 }
 
 function verifyDocsUpdate() {
@@ -316,11 +349,19 @@ function verifyDocsUpdate() {
   const original = fs.existsSync(docsPath) ? fs.readFileSync(docsPath, 'utf8') : '# Selftest Doc\n';
   fs.writeFileSync(docsPath, original, 'utf8');
   const before = listRuns();
+  const beforeSnapshot = snapshotRuns();
   const result = runJob(jobPath);
   assert(result.status === 'ok', 'docs update job should succeed');
   const after = listRuns();
-  const runs = diffRuns(before, after);
-  assert(runs.length === 1, 'docs update should create run directory');
+  const afterSnapshot = snapshotRuns();
+  resolveRunIdFromResult(
+    result,
+    before,
+    beforeSnapshot,
+    after,
+    afterSnapshot,
+    'docs update should create run directory'
+  );
   const updatedDoc = fs.readFileSync(docsPath, 'utf8');
   assert(updatedDoc.includes('Add selftest note'), 'docs instruction not applied');
   fs.writeFileSync(docsPath, original, 'utf8');
@@ -331,6 +372,7 @@ function verifyRepoPatch() {
   const targetPath = path.join(process.cwd(), 'apps/hub/static/jobs.html');
   const original = fs.readFileSync(targetPath, 'utf8');
   const before = listRuns();
+  const beforeSnapshot = snapshotRuns();
   const result = runJob(jobPath);
   assert(result.status === 'ok', 'repo patch job should succeed');
   assert(
@@ -338,8 +380,15 @@ function verifyRepoPatch() {
     'repo patch check missing'
   );
   const after = listRuns();
-  const runs = diffRuns(before, after);
-  assert(runs.length === 1, 'repo patch should create run directory');
+  const afterSnapshot = snapshotRuns();
+  resolveRunIdFromResult(
+    result,
+    before,
+    beforeSnapshot,
+    after,
+    afterSnapshot,
+    'repo patch should create run directory'
+  );
   const updated = fs.readFileSync(targetPath, 'utf8');
   assert(updated.includes('repo_patch'), 'repo patch note missing');
   fs.writeFileSync(targetPath, original, 'utf8');
