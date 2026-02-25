@@ -22,6 +22,18 @@ const { run: runMs2TargetPath } = require('../tests/selftest/ms2_targetPath.test
 const { run: runMs2Runs } = require('../tests/selftest/ms2_runs.test');
 const { run: runMs2Artifacts } = require('../tests/selftest/ms2_artifacts.test');
 const { run: runMs2Events } = require('../tests/selftest/ms2_events.test');
+const { run: runMs25Mcp } = require('../tests/selftest/ms25_mcp.test');
+const { run: runMs25Capability } = require('../tests/selftest/ms25_capability.test');
+const { run: runMs25Preflight } = require('../tests/selftest/ms25_preflight.test');
+const { run: runMs25AutoRoute } = require('../tests/selftest/ms25_autoRoute.test');
+const { run: runMs25Runs } = require('../tests/selftest/ms25_runs.test');
+const { run: runMs3Lockout } = require('../tests/selftest/ms3_lockout.test');
+const { run: runMs3Env } = require('../tests/selftest/ms3_env.test');
+const { run: runMs3Crypto } = require('../tests/selftest/ms3_crypto.test');
+const { run: runMs3Auth } = require('../tests/selftest/ms3_auth.test');
+const { run: runMs3Audit } = require('../tests/selftest/ms3_audit.test');
+const { run: runMs4FigmaVerify } = require('../tests/selftest/ms4_figma_verify.test');
+const { run: runIntegrationMs0Ms4 } = require('../tests/selftest/integration_ms0_ms4.test');
 
 const RUNS_ROOT = path.join(process.cwd(), '.ai-runs');
 
@@ -93,11 +105,19 @@ function requestLocal(app, options = {}) {
     const res = new PassThrough();
     const resHeaders = {};
     let statusCode = 200;
+    Object.defineProperty(res, 'statusCode', {
+      get() {
+        return statusCode;
+      },
+      set(value) {
+        statusCode = value;
+      }
+    });
     res.setHeader = (key, value) => {
       resHeaders[String(key).toLowerCase()] = value;
     };
     res.writeHead = (code, hdrs = {}) => {
-      statusCode = code;
+      res.statusCode = code;
       Object.entries(hdrs).forEach(([k, v]) => {
         resHeaders[String(k).toLowerCase()] = v;
       });
@@ -137,7 +157,7 @@ function runJob(jobPath, extraEnv = {}) {
 
 function runJobWithRunId(jobPath, extraEnv = {}) {
   const before = listRuns();
-  const result = spawnSync('node', ['scripts/run-job.js', '--job', jobPath, '--role', 'operator'], {
+  const result = spawnSync(process.execPath, ['scripts/run-job.js', '--job', jobPath, '--role', 'operator'], {
     encoding: 'utf8',
     timeout: 30000, // 30秒
     env: { ...process.env, ...extraEnv }
@@ -580,7 +600,7 @@ function verifyHubDoctor() {
     // ignore cleanup failures
   }
 
-  const result = spawnSync('node', ['scripts/hub-doctor.js'], {
+  const result = spawnSync(process.execPath, ['scripts/hub-doctor.js'], {
     encoding: 'utf8',
     timeout: 30000 // 30秒
   });
@@ -594,6 +614,21 @@ function verifyHubDoctor() {
   assert(
     'nodeModules' in payload.native.better_sqlite3,
     'doctor.json missing native.better_sqlite3.nodeModules'
+  );
+}
+
+function verifyPrUpFlowLock() {
+  const prUpPath = path.join(process.cwd(), 'scripts', 'pr-up.js');
+  const text = fs.readFileSync(prUpPath, 'utf8');
+  assert(text.includes('function shNodeTool('), 'pr-up.js must use shNodeTool wrapper');
+  assert(
+    text.includes('ネットワーク診断はNGですが、push/gh を継続して実行します。'),
+    'pr-up.js must not abort only on NET_NG'
+  );
+  assert(text.includes('shNodeTool("npm", ["test"]'), 'pr-up.js must run npm test via shNodeTool');
+  assert(
+    text.includes('shNodeTool("node", ["scripts/gen-pr-body.js"]'),
+    'pr-up.js must run gen-pr-body via shNodeTool'
   );
 }
 
@@ -704,12 +739,25 @@ async function main() {
   verifyFigmaPlanGuarantee();
   verifyPhase2SamplesExist();
   verifyHubDoctor();
+  verifyPrUpFlowLock();
   await verifyRunJobClientDepth();
   await verifyRunTimeout();
   await runMs2TargetPath();
   await runMs2Runs();
   await runMs2Artifacts();
   await runMs2Events();
+  await runMs25Mcp();
+  await runMs25Capability();
+  await runMs25Preflight();
+  await runMs25AutoRoute();
+  await runMs25Runs();
+  await runMs3Lockout();
+  await runMs3Env();
+  await runMs3Crypto();
+  await runMs3Auth();
+  await runMs3Audit();
+  await runMs4FigmaVerify();
+  await runIntegrationMs0Ms4();
   console.log('Selftest ok');
 }
 
