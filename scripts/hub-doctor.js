@@ -22,6 +22,20 @@ function runCommand(cmd, args, options = {}) {
   };
 }
 
+function classifyNetworkError(error) {
+  const code = error && error.code ? String(error.code) : '';
+  if (['EPERM', 'EACCES', 'ENOENT'].includes(code)) {
+    return { status: 'CHECK_BLOCKED', detail: code };
+  }
+  if (['EAI_AGAIN', 'ENOTFOUND', 'EAI_FAIL'].includes(code)) {
+    return { status: 'CHECK_DNS_NG', detail: code };
+  }
+  return {
+    status: 'CHECK_NET_NG',
+    detail: code || (error && error.message ? error.message : String(error))
+  };
+}
+
 function checkNetwork() {
   return new Promise((resolve) => {
     const req = https.request(
@@ -35,18 +49,19 @@ function checkNetwork() {
         res.resume();
         const ok = res.statusCode >= 200 && res.statusCode < 400;
         resolve({
-          status: ok ? 'NET_OK' : 'NET_NG',
+          status: ok ? 'CHECK_OK' : 'CHECK_NET_NG',
           ok,
           detail: ok ? null : `HTTP ${res.statusCode}`
         });
       }
     );
-    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('timeout', () => req.destroy(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })));
     req.on('error', (error) => {
+      const classified = classifyNetworkError(error);
       resolve({
-        status: 'NET_NG',
+        status: classified.status,
         ok: false,
-        detail: error && error.message ? error.message : String(error)
+        detail: classified.detail
       });
     });
     req.end();
@@ -145,7 +160,15 @@ async function main() {
   lines.push(`NET: ${network.status}`);
   if (!network.ok && network.detail) {
     lines.push(`NET detail: ${network.detail}`);
-    lines.push('NET_NG: git/gh operations are prohibited.');
+    if (network.status === 'CHECK_DNS_NG') {
+      lines.push('CHECK_DNS_NG: DNS failure. git/gh operations are prohibited.');
+      lines.push('Recovery: bash scripts/fix-dns.sh');
+    } else if (network.status === 'CHECK_BLOCKED') {
+      lines.push('CHECK_BLOCKED: Network check blocked. git/gh operations are prohibited.');
+      lines.push('Recovery: check container permissions / network policy.');
+    } else {
+      lines.push('CHECK_NET_NG: git/gh operations are prohibited.');
+    }
   }
   lines.push(`node: ${nodeVersion.ok ? nodeVersion.version : 'NG'}`);
   if (!nodeVersion.ok && nodeVersion.detail) {

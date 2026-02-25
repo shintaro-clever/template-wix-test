@@ -2,6 +2,7 @@ name: agents-structure
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened]
     paths:
       - "agents/**"
       - "docs/ai/**"
@@ -19,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.22.0
       - name: Install (minimal)
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Check structure

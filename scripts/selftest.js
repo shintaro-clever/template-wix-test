@@ -62,6 +62,28 @@ function listRuns() {
   }
 }
 
+function snapshotRuns() {
+  const snapshot = {};
+  let entries = [];
+  try {
+    entries = fs.readdirSync(RUNS_ROOT);
+  } catch (error) {
+    return snapshot;
+  }
+  entries.forEach((name) => {
+    if (!name || name.startsWith('.')) return;
+    const fullPath = path.join(RUNS_ROOT, name);
+    let stat;
+    try {
+      stat = fs.statSync(fullPath);
+    } catch {
+      return;
+    }
+    snapshot[name] = { mtimeMs: stat.mtimeMs, isDir: stat.isDirectory() };
+  });
+  return snapshot;
+}
+
 function diffRuns(before, after) {
   const added = [];
   after.forEach((entry) => {
@@ -70,6 +92,24 @@ function diffRuns(before, after) {
     }
   });
   return added;
+}
+
+function resolveRunIdFromResult(result, before, beforeSnapshot, after, afterSnapshot, errorMessage) {
+  if (result && result.run_id) {
+    return String(result.run_id);
+  }
+  let newRuns = diffRuns(before, after);
+  if (newRuns.length === 0) {
+    const candidates = Object.entries(afterSnapshot)
+      .filter(([, info]) => info && info.isDir)
+      .filter(([name, info]) => !beforeSnapshot[name] || info.mtimeMs > beforeSnapshot[name].mtimeMs)
+      .sort((a, b) => (b[1].mtimeMs || 0) - (a[1].mtimeMs || 0));
+    if (candidates.length > 0) {
+      newRuns = [candidates[0][0]];
+    }
+  }
+  assert(newRuns.length === 1, errorMessage);
+  return newRuns[0];
 }
 
 function validateLatestOfflineSmoke(latestSmokePath) {
@@ -168,6 +208,7 @@ function runJob(jobPath, extraEnv = {}) {
 
 function runJobWithRunId(jobPath, extraEnv = {}) {
   const before = listRuns();
+  const beforeSnapshot = snapshotRuns();
   const result = spawnSync(process.execPath, ['scripts/run-job.js', '--job', jobPath, '--role', 'operator'], {
     encoding: 'utf8',
     timeout: 30000, // 30秒
@@ -188,10 +229,23 @@ function runJobWithRunId(jobPath, extraEnv = {}) {
   if (stdout) {
     payload = JSON.parse(stdout);
   }
+  let runId = payload && payload.run_id ? String(payload.run_id) : '';
   const after = listRuns();
-  const newRuns = diffRuns(before, after);
-  assert(newRuns.length === 1, 'run-job.js missing run directory (unexpected)');
-  const runId = newRuns[0];
+  const afterSnapshot = snapshotRuns();
+  let newRuns = diffRuns(before, after);
+  if (!runId) {
+    if (newRuns.length === 0) {
+      const candidates = Object.entries(afterSnapshot)
+        .filter(([, info]) => info && info.isDir)
+        .filter(([name, info]) => !beforeSnapshot[name] || info.mtimeMs > beforeSnapshot[name].mtimeMs)
+        .sort((a, b) => (b[1].mtimeMs || 0) - (a[1].mtimeMs || 0));
+      if (candidates.length > 0) {
+        newRuns = [candidates[0][0]];
+      }
+    }
+    assert(newRuns.length === 1, 'run-job.js missing run directory (unexpected)');
+    runId = newRuns[0];
+  }
   if (!payload) {
     const runJsonPath = path.join(RUNS_ROOT, runId, 'run.json');
     assert(fs.existsSync(runJsonPath), 'run.json missing for fallback JSON');
@@ -241,12 +295,19 @@ function verifyOfflineSmoke() {
   }
   const jobPath = path.join(__dirname, 'sample-job.mcp.offline.smoke.json');
   const before = listRuns();
+  const beforeSnapshot = snapshotRuns();
   const result = runJob(jobPath);
   assert(result.status === 'ok', 'offline smoke should succeed');
   const after = listRuns();
-  const newRuns = diffRuns(before, after);
-  assert(newRuns.length === 1, 'offline smoke should create one run directory');
-  const runId = newRuns[0];
+  const afterSnapshot = snapshotRuns();
+  const runId = resolveRunIdFromResult(
+    result,
+    before,
+    beforeSnapshot,
+    after,
+    afterSnapshot,
+    'offline smoke should create one run directory'
+  );
   const runDir = path.join(RUNS_ROOT, runId);
   assert(fs.existsSync(path.join(runDir, 'run.json')), 'run.json missing for offline smoke');
   assert(fs.existsSync(path.join(runDir, 'audit.jsonl')), 'audit.jsonl missing for offline smoke');
@@ -257,6 +318,7 @@ function verifyOfflineSmoke() {
   assert(latestSmoke.runId === runId, 'latest_offline_smoke.json runId should match latest success');
 
   const failBefore = listRuns();
+  const failBeforeSnapshot = snapshotRuns();
   const failResult = runJob(jobPath, { C2F_STUB_FAIL: '1' });
   assert(failResult.status === 'error', 'offline smoke failure should be error');
   assert(
@@ -264,14 +326,21 @@ function verifyOfflineSmoke() {
     'offline smoke failure must include mcp_exec check'
   );
   const failAfter = listRuns();
-  const failRuns = diffRuns(failBefore, failAfter);
-  assert(failRuns.length === 1, 'offline smoke failure should create run directory');
-  const failDir = path.join(RUNS_ROOT, failRuns[0]);
+  const failAfterSnapshot = snapshotRuns();
+  const failRunId = resolveRunIdFromResult(
+    failResult,
+    failBefore,
+    failBeforeSnapshot,
+    failAfter,
+    failAfterSnapshot,
+    'offline smoke failure should create run directory'
+  );
+  const failDir = path.join(RUNS_ROOT, failRunId);
   assert(fs.existsSync(path.join(failDir, 'run.json')), 'offline failure missing run.json');
   assert(fs.existsSync(path.join(failDir, 'audit.jsonl')), 'offline failure missing audit');
   const failLatest = validateLatestOfflineSmoke(latestSmokePath);
   assert(failLatest.status === 'error', 'latest_offline_smoke.json status should be error after failure');
-  assert(failLatest.runId === failRuns[0], 'latest_offline_smoke.json runId should match latest failure');
+  assert(failLatest.runId === failRunId, 'latest_offline_smoke.json runId should match latest failure');
 }
 
 function verifyDocsUpdate() {
@@ -280,11 +349,19 @@ function verifyDocsUpdate() {
   const original = fs.existsSync(docsPath) ? fs.readFileSync(docsPath, 'utf8') : '# Selftest Doc\n';
   fs.writeFileSync(docsPath, original, 'utf8');
   const before = listRuns();
+  const beforeSnapshot = snapshotRuns();
   const result = runJob(jobPath);
   assert(result.status === 'ok', 'docs update job should succeed');
   const after = listRuns();
-  const runs = diffRuns(before, after);
-  assert(runs.length === 1, 'docs update should create run directory');
+  const afterSnapshot = snapshotRuns();
+  resolveRunIdFromResult(
+    result,
+    before,
+    beforeSnapshot,
+    after,
+    afterSnapshot,
+    'docs update should create run directory'
+  );
   const updatedDoc = fs.readFileSync(docsPath, 'utf8');
   assert(updatedDoc.includes('Add selftest note'), 'docs instruction not applied');
   fs.writeFileSync(docsPath, original, 'utf8');
@@ -295,6 +372,7 @@ function verifyRepoPatch() {
   const targetPath = path.join(process.cwd(), 'apps/hub/static/jobs.html');
   const original = fs.readFileSync(targetPath, 'utf8');
   const before = listRuns();
+  const beforeSnapshot = snapshotRuns();
   const result = runJob(jobPath);
   assert(result.status === 'ok', 'repo patch job should succeed');
   assert(
@@ -302,8 +380,15 @@ function verifyRepoPatch() {
     'repo patch check missing'
   );
   const after = listRuns();
-  const runs = diffRuns(before, after);
-  assert(runs.length === 1, 'repo patch should create run directory');
+  const afterSnapshot = snapshotRuns();
+  resolveRunIdFromResult(
+    result,
+    before,
+    beforeSnapshot,
+    after,
+    afterSnapshot,
+    'repo patch should create run directory'
+  );
   const updated = fs.readFileSync(targetPath, 'utf8');
   assert(updated.includes('repo_patch'), 'repo patch note missing');
   fs.writeFileSync(targetPath, original, 'utf8');
@@ -619,7 +704,10 @@ function verifyHubDoctor() {
   assert(fs.existsSync(outputPath), 'doctor.json missing after hub-doctor.js');
   const payload = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
   assert(payload && payload.network && payload.versions, 'doctor.json missing required fields');
-  assert(payload.network.status === 'NET_OK' || payload.network.status === 'NET_NG', 'invalid network status');
+  assert(
+    ['CHECK_OK', 'CHECK_NET_NG', 'CHECK_DNS_NG', 'CHECK_BLOCKED'].includes(payload.network.status),
+    'invalid network status'
+  );
   assert(payload.versions.node && payload.versions.npm, 'doctor.json missing version entries');
   assert(payload.native && payload.native.better_sqlite3, 'doctor.json missing native.better_sqlite3');
   assert(

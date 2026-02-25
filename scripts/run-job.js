@@ -187,7 +187,7 @@ function finalizeRun(runPaths, job, runnerResult, createdAt) {
     status: runnerResult.status,
     checks_summary: summary
   });
-  return runnerResult;
+  return { ...runnerResult, run_id: runPaths.runId };
 }
 
 function recordRunStart(runPaths, job) {
