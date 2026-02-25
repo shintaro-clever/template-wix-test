@@ -1,4 +1,5 @@
 Phase1 Integration Hub Stub（検証器：/jobs）
+テスト行（PR動作確認用）
 
 /jobs は本体UIではなく、Phase2 の「ジョブ生成→実行→結果取り込み→次アクション」を回すための検証用UIです。
 
