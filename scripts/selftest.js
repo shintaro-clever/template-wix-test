@@ -18,24 +18,35 @@ const {
   expireTimedOutRuns
 } = require('../src/db/runs');
 const { db: hubDb, DEFAULT_TENANT } = require('../src/db');
-const { run: runMs2TargetPath } = require('../tests/selftest/ms2_targetPath.test');
-const { run: runMs2Runs } = require('../tests/selftest/ms2_runs.test');
-const { run: runMs2Artifacts } = require('../tests/selftest/ms2_artifacts.test');
-const { run: runMs2Events } = require('../tests/selftest/ms2_events.test');
-const { run: runMs25Mcp } = require('../tests/selftest/ms25_mcp.test');
-const { run: runMs25Capability } = require('../tests/selftest/ms25_capability.test');
-const { run: runMs25Preflight } = require('../tests/selftest/ms25_preflight.test');
-const { run: runMs25AutoRoute } = require('../tests/selftest/ms25_autoRoute.test');
-const { run: runMs25Runs } = require('../tests/selftest/ms25_runs.test');
-const { run: runMs3Lockout } = require('../tests/selftest/ms3_lockout.test');
-const { run: runMs3Env } = require('../tests/selftest/ms3_env.test');
-const { run: runMs3Crypto } = require('../tests/selftest/ms3_crypto.test');
-const { run: runMs3Auth } = require('../tests/selftest/ms3_auth.test');
-const { run: runMs3Audit } = require('../tests/selftest/ms3_audit.test');
-const { run: runMs4FigmaVerify } = require('../tests/selftest/ms4_figma_verify.test');
-const { run: runIntegrationMs0Ms4 } = require('../tests/selftest/integration_ms0_ms4.test');
 
 const RUNS_ROOT = path.join(process.cwd(), '.ai-runs');
+
+function loadSelftestRunners() {
+  const dir = path.join(__dirname, '..', 'tests', 'selftest');
+  const order = [
+    'ms2_targetPath.test.js',
+    'ms2_runs.test.js',
+    'ms2_artifacts.test.js',
+    'ms2_events.test.js',
+    'ms4_targetPath_cases.test.js',
+    'ms4_figma_verify.test.js',
+    'integration_ms0_ms4.test.js'
+  ];
+  const runners = [];
+  for (const name of order) {
+    const filePath = path.join(dir, name);
+    if (!fs.existsSync(filePath)) {
+      console.warn(`[selftest] SKIP missing ${name}`);
+      continue;
+    }
+    const mod = require(filePath);
+    if (typeof mod.run !== 'function') {
+      throw new Error(`[selftest] invalid selftest module: ${name} (missing run)`);
+    }
+    runners.push({ name, run: mod.run });
+  }
+  return runners;
+}
 
 function assert(condition, message) {
   if (!condition) {
@@ -742,22 +753,10 @@ async function main() {
   verifyPrUpFlowLock();
   await verifyRunJobClientDepth();
   await verifyRunTimeout();
-  await runMs2TargetPath();
-  await runMs2Runs();
-  await runMs2Artifacts();
-  await runMs2Events();
-  await runMs25Mcp();
-  await runMs25Capability();
-  await runMs25Preflight();
-  await runMs25AutoRoute();
-  await runMs25Runs();
-  await runMs3Lockout();
-  await runMs3Env();
-  await runMs3Crypto();
-  await runMs3Auth();
-  await runMs3Audit();
-  await runMs4FigmaVerify();
-  await runIntegrationMs0Ms4();
+  const runners = loadSelftestRunners();
+  for (const runner of runners) {
+    await runner.run();
+  }
   console.log('Selftest ok');
 }
 
