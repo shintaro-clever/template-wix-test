@@ -126,6 +126,8 @@
       const artifactList = document.getElementById('artifactList');
       const planJsonEl = document.getElementById('planJson');
       const nodesJsonEl = document.getElementById('nodesJson');
+      const terminalStatuses = new Set(['succeeded', 'failed', 'cancelled']);
+      let pollTimer = null;
 
       function setSummary(detail) {
         document.getElementById('runTitle').textContent = `Run: ${detail.run_id}`;
@@ -189,16 +191,41 @@
           renderPlan(detail.figma_bootstrap_plan);
           renderNodes(detail.figma_bootstrap_nodes);
           runJsonEl.textContent = JSON.stringify(detail.run_json, null, 2);
+          return detail;
         } catch (error) {
           console.error(error);
           runJsonEl.textContent = 'Run 情報の取得に失敗しました。';
           auditPreviewEl.textContent = '-';
           planJsonEl.textContent = '-';
           nodesJsonEl.textContent = '-';
+          return null;
         }
       }
 
-      loadRun();
+      function stopPolling() {
+        if (pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+      }
+
+      async function pollRun() {
+        const detail = await loadRun();
+        if (detail && terminalStatuses.has(detail.status)) {
+          stopPolling();
+        }
+      }
+
+      function startPolling() {
+        stopPolling();
+        pollRun();
+        pollTimer = setInterval(pollRun, 3000);
+      }
+
+      window.addEventListener('pagehide', stopPolling);
+      window.addEventListener('beforeunload', stopPolling);
+
+      startPolling();
     </script>
   </body>
 </html>

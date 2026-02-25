@@ -4,11 +4,24 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const os = require('os');
 const { PassThrough } = require('stream');
+const http = require('http');
 const { validateJob } = require('../src/jobSpec');
 const { callFigmaApi, normalizeDepth, sanitizeQuery } = require('../src/figma/api');
 const { buildCodexPrompt } = require('../src/codex/prompt');
 const { resolveHostPort } = require('../src/server/config');
 const { createApp } = require('../src/server/app');
+const { runJobClient } = require('../src/runner/runJobClient');
+const {
+  createRunRecord,
+  getRunById,
+  transitionToRunning,
+  expireTimedOutRuns
+} = require('../src/db/runs');
+const { db: hubDb, DEFAULT_TENANT } = require('../src/db');
+const { run: runMs2TargetPath } = require('../tests/selftest/ms2_targetPath.test');
+const { run: runMs2Runs } = require('../tests/selftest/ms2_runs.test');
+const { run: runMs2Artifacts } = require('../tests/selftest/ms2_artifacts.test');
+const { run: runMs2Events } = require('../tests/selftest/ms2_events.test');
 
 const RUNS_ROOT = path.join(process.cwd(), '.ai-runs');
 
@@ -34,6 +47,37 @@ function diffRuns(before, after) {
     }
   });
   return added;
+}
+
+function validateLatestOfflineSmoke(latestSmokePath) {
+  if (!fs.existsSync(latestSmokePath)) {
+    throw new Error('latest_offline_smoke.json missing');
+  }
+  let payload;
+  try {
+    payload = JSON.parse(fs.readFileSync(latestSmokePath, 'utf8'));
+  } catch (error) {
+    throw new Error('latest_offline_smoke.json invalid JSON');
+  }
+  const requiredKeys = ['runId', 'job_type', 'startedAt', 'finishedAt', 'status', 'summary'];
+  for (const key of requiredKeys) {
+    if (!(key in payload)) {
+      throw new Error(`latest_offline_smoke.json missing key: ${key}`);
+    }
+  }
+  const startMs = Date.parse(payload.startedAt);
+  const endMs = Date.parse(payload.finishedAt);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) {
+    throw new Error('latest_offline_smoke.json invalid timestamp');
+  }
+  if (endMs < startMs) {
+    throw new Error('latest_offline_smoke.json finishedAt before startedAt');
+  }
+  const allowed = new Set(['ok', 'error', 'invalid']);
+  if (!allowed.has(payload.status)) {
+    throw new Error(`latest_offline_smoke.json invalid status: ${payload.status}`);
+  }
+  return payload;
 }
 
 function requestLocal(app, options = {}) {
@@ -98,7 +142,16 @@ function runJobWithRunId(jobPath, extraEnv = {}) {
     timeout: 30000, // 30秒
     env: { ...process.env, ...extraEnv }
   });
-  assert(result.status === 0, `run-job.js exited with ${result.status}: ${result.stderr}`);
+  if (result.status !== 0) {
+    const stderrText = (result.stderr || '').trim();
+    const lines = stderrText.split(/\r?\n/).filter(Boolean);
+    const lastLine = lines.length ? lines[lines.length - 1] : '';
+    if (lastLine.startsWith('run_dir_create_failed:')) {
+      const reason = lastLine.replace('run_dir_create_failed:', '').trim() || 'unknown';
+      throw new Error(`run-job.js did not create run directory: ${reason}`);
+    }
+    throw new Error(`run-job.js exited with ${result.status}: ${stderrText}`);
+  }
   const stdout = result.stdout.trim();
   let payload = null;
   if (stdout) {
@@ -106,7 +159,7 @@ function runJobWithRunId(jobPath, extraEnv = {}) {
   }
   const after = listRuns();
   const newRuns = diffRuns(before, after);
-  assert(newRuns.length === 1, 'run-job.js did not create run directory');
+  assert(newRuns.length === 1, 'run-job.js missing run directory (unexpected)');
   const runId = newRuns[0];
   if (!payload) {
     const runJsonPath = path.join(RUNS_ROOT, runId, 'run.json');
@@ -167,6 +220,10 @@ function verifyOfflineSmoke() {
   assert(fs.existsSync(path.join(runDir, 'run.json')), 'run.json missing for offline smoke');
   assert(fs.existsSync(path.join(runDir, 'audit.jsonl')), 'audit.jsonl missing for offline smoke');
   assert(fs.existsSync(path.join(runDir, 'claude_mcp_smoketest.json')), 'claude_mcp_smoketest missing');
+  const latestSmokePath = path.join(RUNS_ROOT, 'latest_offline_smoke.json');
+  const latestSmoke = validateLatestOfflineSmoke(latestSmokePath);
+  assert(latestSmoke.status === 'ok', 'latest_offline_smoke.json status should be ok after success');
+  assert(latestSmoke.runId === runId, 'latest_offline_smoke.json runId should match latest success');
 
   const failBefore = listRuns();
   const failResult = runJob(jobPath, { C2F_STUB_FAIL: '1' });
@@ -181,6 +238,9 @@ function verifyOfflineSmoke() {
   const failDir = path.join(RUNS_ROOT, failRuns[0]);
   assert(fs.existsSync(path.join(failDir, 'run.json')), 'offline failure missing run.json');
   assert(fs.existsSync(path.join(failDir, 'audit.jsonl')), 'offline failure missing audit');
+  const failLatest = validateLatestOfflineSmoke(latestSmokePath);
+  assert(failLatest.status === 'error', 'latest_offline_smoke.json status should be error after failure');
+  assert(failLatest.runId === failRuns[0], 'latest_offline_smoke.json runId should match latest failure');
 }
 
 function verifyDocsUpdate() {
@@ -510,6 +570,126 @@ function verifyPhase2SamplesExist() {
   console.log('[selftest] OK: phase2 samples/docs exist');
 }
 
+function verifyHubDoctor() {
+  const outputPath = path.join(process.cwd(), 'doctor.json');
+  try {
+    if (fs.existsSync(outputPath)) {
+      fs.unlinkSync(outputPath);
+    }
+  } catch {
+    // ignore cleanup failures
+  }
+
+  const result = spawnSync('node', ['scripts/hub-doctor.js'], {
+    encoding: 'utf8',
+    timeout: 30000 // 30秒
+  });
+  assert(result.status === 0, `hub-doctor.js exited with ${result.status}: ${result.stderr}`);
+  assert(fs.existsSync(outputPath), 'doctor.json missing after hub-doctor.js');
+  const payload = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+  assert(payload && payload.network && payload.versions, 'doctor.json missing required fields');
+  assert(payload.network.status === 'NET_OK' || payload.network.status === 'NET_NG', 'invalid network status');
+  assert(payload.versions.node && payload.versions.npm, 'doctor.json missing version entries');
+  assert(payload.native && payload.native.better_sqlite3, 'doctor.json missing native.better_sqlite3');
+  assert(
+    'nodeModules' in payload.native.better_sqlite3,
+    'doctor.json missing native.better_sqlite3.nodeModules'
+  );
+}
+
+async function verifyRunJobClientDepth() {
+  const received = [];
+  const server = http.createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      let payload = {};
+      try {
+        payload = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+      } catch {
+        payload = {};
+      }
+      received.push(payload);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ ok: true }));
+    });
+  });
+
+  const originalRequest = http.request;
+  http.request = (options, callback) => {
+    const req = new PassThrough();
+    req.setTimeout = () => req;
+    req.destroy = (error) => {
+      if (error) req.emit('error', error);
+    };
+
+    const res = new PassThrough();
+    const resHeaders = {};
+    res.headers = resHeaders;
+    res.setHeader = (key, value) => {
+      resHeaders[String(key).toLowerCase()] = value;
+    };
+    res.writeHead = (code, hdrs = {}) => {
+      res.statusCode = code;
+      Object.entries(hdrs).forEach(([k, v]) => {
+        resHeaders[String(k).toLowerCase()] = v;
+      });
+    };
+    res.statusCode = 200;
+
+    if (callback) callback(res);
+    process.nextTick(() => {
+      server.emit('request', req, res);
+    });
+    return req;
+  };
+
+  try {
+    const url = 'http://localhost/run-job';
+    await runJobClient({ url, inputs: { depth: 3, foo: 'bar' }, job_type: 'test' });
+    await runJobClient({ url, inputs: { depth: null, foo: 'bar' }, job_type: 'test' });
+    await runJobClient({ url, inputs: { foo: 'bar' }, job_type: 'test' });
+
+    assert(received.length === 3, 'runJobClient should send three requests');
+    assert(received[0].inputs.depth === 3, 'depth should be included when number');
+    assert(!('depth' in received[1].inputs), 'depth should be omitted when null');
+    assert(!('depth' in received[2].inputs), 'depth should be omitted when absent');
+  } finally {
+    http.request = originalRequest;
+  }
+}
+
+async function verifyRunTimeout() {
+  const projectId = `selftest-${Date.now()}`;
+  const runId = createRunRecord({
+    tenantId: DEFAULT_TENANT,
+    projectId,
+    inputsJson: { message: 'timeout test' }
+  });
+  const moved = transitionToRunning({ tenantId: DEFAULT_TENANT, runId });
+  assert(moved, 'transition to running should succeed');
+
+  const past = new Date(Date.now() - 500).toISOString();
+  hubDb.prepare("UPDATE runs SET updated_at=? WHERE tenant_id=? AND id=?").run(past, DEFAULT_TENANT, runId);
+
+  const prevTimeout = process.env.RUN_TIMEOUT_MS;
+  process.env.RUN_TIMEOUT_MS = '100';
+  try {
+    const expired = expireTimedOutRuns({ tenantId: DEFAULT_TENANT });
+    assert(expired >= 1, 'expireTimedOutRuns should mark at least one run');
+    const run = getRunById({ tenantId: DEFAULT_TENANT, runId });
+    assert(run.status === 'failed', 'timed out run should be failed');
+    assert(run.failure_code === 'service_unavailable', 'timed out run should set failure_code');
+  } finally {
+    if (prevTimeout === undefined) {
+      delete process.env.RUN_TIMEOUT_MS;
+    } else {
+      process.env.RUN_TIMEOUT_MS = prevTimeout;
+    }
+    hubDb.prepare("DELETE FROM runs WHERE tenant_id=? AND id=?").run(DEFAULT_TENANT, runId);
+  }
+}
+
 async function main() {
   validateSamples();
   verifyOfflineSmoke();
@@ -523,6 +703,13 @@ async function main() {
   await verifyFigmaDepthNormalization();
   verifyFigmaPlanGuarantee();
   verifyPhase2SamplesExist();
+  verifyHubDoctor();
+  await verifyRunJobClientDepth();
+  await verifyRunTimeout();
+  await runMs2TargetPath();
+  await runMs2Runs();
+  await runMs2Artifacts();
+  await runMs2Events();
   console.log('Selftest ok');
 }
 

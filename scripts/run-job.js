@@ -82,6 +82,11 @@ function ensureAllowedPath(target, allowed) {
 }
 
 function ensureRunDirectory(runId) {
+  if (!runId || typeof runId !== 'string') {
+    const error = new Error('invalid runId');
+    error.code = 'INVALID_RUN_ID';
+    throw error;
+  }
   const baseDir = path.join(process.cwd(), '.ai-runs', runId);
   fs.mkdirSync(baseDir, { recursive: true });
   return {
@@ -92,8 +97,63 @@ function ensureRunDirectory(runId) {
   };
 }
 
+function createRunPathsOrExit(runId) {
+  try {
+    return ensureRunDirectory(runId);
+  } catch (error) {
+    const reason = error && (error.code || error.message) ? (error.code || error.message) : String(error);
+    console.error(`run_dir_create_failed: ${reason}`);
+    process.exit(1);
+  }
+}
+
+function generateRunId() {
+  const id = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
+  if (!/^[a-z0-9]+-[a-f0-9]+$/.test(id)) {
+    const error = new Error('invalid runId');
+    error.code = 'INVALID_RUN_ID';
+    throw error;
+  }
+  return id;
+}
+
+function createRunIdOrExit() {
+  try {
+    return generateRunId();
+  } catch (error) {
+    const reason = error && (error.code || error.message) ? (error.code || error.message) : String(error);
+    console.error(`run_dir_create_failed: ${reason}`);
+    process.exit(1);
+  }
+}
+
 function appendAudit(runPaths, event) {
   fs.appendFileSync(runPaths.audit, `${JSON.stringify(event)}\n`);
+}
+
+function writeJsonAtomic(targetPath, payload) {
+  const dir = path.dirname(targetPath);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = path.join(dir, `.tmp-${process.pid}-${Date.now()}`);
+  fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2));
+  fs.renameSync(tmpPath, targetPath);
+}
+
+function updateLatestOfflineSmoke({ runId, jobType, startedAt, finishedAt, status, summary }) {
+  const runsRoot = path.join(process.cwd(), '.ai-runs');
+  fs.mkdirSync(runsRoot, { recursive: true });
+  const payload = {
+    runId,
+    job_type: jobType,
+    startedAt,
+    finishedAt,
+    status,
+    summary
+  };
+  const tmpPath = path.join(runsRoot, `.latest_offline_smoke.${process.pid}.${Date.now()}.tmp`);
+  const targetPath = path.join(runsRoot, 'latest_offline_smoke.json');
+  fs.writeFileSync(tmpPath, JSON.stringify(payload, null, 2));
+  fs.renameSync(tmpPath, targetPath);
 }
 
 function summarizeChecks(checks = []) {
@@ -118,7 +178,7 @@ function finalizeRun(runPaths, job, runnerResult, createdAt) {
       created_at: createdAt
     }
   };
-  fs.writeFileSync(runPaths.runJson, JSON.stringify(payload, null, 2));
+  writeJsonAtomic(runPaths.runJson, payload);
   appendAudit(runPaths, {
     event: 'RUN_END',
     ts: new Date().toISOString(),
@@ -440,14 +500,26 @@ function applyRepoPatch(targetPath, instruction, allowHtmlComment = false) {
 async function executeDocsUpdateJob(jobPayload) {
   const job = cloneJob(jobPayload);
   job.constraints.max_files_changed = 1;
-  const runId = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-  const runPaths = ensureRunDirectory(runId);
+  const runId = createRunIdOrExit();
+  const runPaths = createRunPathsOrExit(runId);
   recordRunStart(runPaths, job);
   const createdAt = new Date().toISOString();
 
   const validation = validateJob(job);
   if (!validation.ok) {
-    return finalizeRun(runPaths, job, buildValidationFailure(validation.errors), createdAt);
+    const result = buildValidationFailure(validation.errors);
+    if (isOfflineSmoke) {
+      const finishedAt = new Date().toISOString();
+      updateLatestOfflineSmoke({
+        runId,
+        jobType: job.job_type,
+        startedAt,
+        finishedAt,
+        status: result.status,
+        summary: summarizeChecks(result.checks || [])
+      });
+    }
+    return finalizeRun(runPaths, job, result, createdAt);
   }
 
   try {
@@ -486,8 +558,8 @@ async function executeDocsUpdateJob(jobPayload) {
 async function executeRepoPatchJob(jobPayload) {
   const job = cloneJob(jobPayload);
   job.constraints.max_files_changed = 1;
-  const runId = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-  const runPaths = ensureRunDirectory(runId);
+  const runId = createRunIdOrExit();
+  const runPaths = createRunPathsOrExit(runId);
   recordRunStart(runPaths, job);
   const createdAt = new Date().toISOString();
 
@@ -532,8 +604,8 @@ async function executeRepoPatchJob(jobPayload) {
 
 async function executeFigmaBootstrapJob(jobPayload) {
   const job = cloneJob(jobPayload);
-  const runId = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-  const runPaths = ensureRunDirectory(runId);
+  const runId = createRunIdOrExit();
+  const runPaths = createRunPathsOrExit(runId);
   recordRunStart(runPaths, job);
   const createdAt = new Date().toISOString();
 
@@ -885,8 +957,8 @@ function runSpawnCommand(command, args, env) {
 
 async function executeDiagnosticsJob(jobPayload) {
   const job = cloneJob(jobPayload);
-  const runId = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-  const runPaths = ensureRunDirectory(runId);
+  const runId = createRunIdOrExit();
+  const runPaths = createRunPathsOrExit(runId);
   recordRunStart(runPaths, job);
   const createdAt = new Date().toISOString();
 
@@ -982,8 +1054,8 @@ async function executeDiagnosticsJob(jobPayload) {
 
 async function executeSpawnJob(jobPayload) {
   const job = cloneJob(jobPayload);
-  const runId = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-  const runPaths = ensureRunDirectory(runId);
+  const runId = createRunIdOrExit();
+  const runPaths = createRunPathsOrExit(runId);
   recordRunStart(runPaths, job);
   const createdAt = new Date().toISOString();
 
@@ -1088,10 +1160,28 @@ async function executeMcpJob(jobPayload, role) {
     return executeSpawnJob(jobPayload);
   }
   const job = cloneJob(jobPayload);
-  const runId = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`;
-  const runPaths = ensureRunDirectory(runId);
+  const runId = createRunIdOrExit();
+  const runPaths = createRunPathsOrExit(runId);
   recordRunStart(runPaths, job);
   const createdAt = new Date().toISOString();
+  const startedAt = createdAt;
+  const isOfflineSmoke = job && job.job_type === 'integration_hub.phase2.mcp.offline_smoke';
+
+  if (isOfflineSmoke) {
+    const initialRunJson = {
+      job,
+      runnerResult: {
+        status: 'running',
+        checks: [],
+        logs: ['offline_smoke started']
+      },
+      meta: {
+        schema_version: SCHEMA_VERSION,
+        created_at: createdAt
+      }
+    };
+    writeJsonAtomic(runPaths.runJson, initialRunJson);
+  }
 
   const validation = validateJob(job);
   if (!validation.ok) {
@@ -1105,6 +1195,17 @@ async function executeMcpJob(jobPayload, role) {
     runnerJob.inputs = runnerJob.inputs || {};
     runnerJob.inputs.target_path_resolved = resolvedTarget;
     const runnerResult = await runAdapter(runnerJob, { role });
+    if (isOfflineSmoke) {
+      const finishedAt = new Date().toISOString();
+      updateLatestOfflineSmoke({
+        runId,
+        jobType: job.job_type,
+        startedAt,
+        finishedAt,
+        status: runnerResult.status,
+        summary: summarizeChecks(runnerResult.checks || [])
+      });
+    }
     return finalizeRun(runPaths, job, runnerResult, createdAt);
   } catch (error) {
     const result = {
@@ -1113,6 +1214,17 @@ async function executeMcpJob(jobPayload, role) {
       checks: [{ id: 'mcp_exec', ok: false, reason: error.message }],
       logs: ['runner_adapter=mcp']
     };
+    if (isOfflineSmoke) {
+      const finishedAt = new Date().toISOString();
+      updateLatestOfflineSmoke({
+        runId,
+        jobType: job.job_type,
+        startedAt,
+        finishedAt,
+        status: result.status,
+        summary: summarizeChecks(result.checks || [])
+      });
+    }
     return finalizeRun(runPaths, job, result, createdAt);
   }
 }

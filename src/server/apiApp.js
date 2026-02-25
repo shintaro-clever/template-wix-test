@@ -12,6 +12,8 @@ const {
   patchProject,
   deleteProject,
 } = require("../api/projects");
+const { handleProjectRunsPost } = require("../routes/runs");
+const { handleArtifactsPost, handleArtifactsGet } = require("../routes/artifacts");
 
 function createApiServer() {
   const db = openDb();
@@ -53,6 +55,34 @@ function createApiServer() {
     }
 
     // /api/projects/:id
+    const runMatch = urlPath.match(/^\/api\/projects\/([^/]+)\/runs$/);
+    if (runMatch) {
+      const id = runMatch[1];
+      if (method === "POST") {
+        return handleProjectRunsPost(req, res, db, id);
+      }
+      res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
+      return res.end("Method not allowed");
+    }
+
+    if (urlPath === "/api/artifacts") {
+      if (method === "POST") {
+        return handleArtifactsPost(req, res);
+      }
+      res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
+      return res.end("Method not allowed");
+    }
+
+    const artifactMatch = urlPath.match(/^\/api\/artifacts\/([^/]+)$/);
+    if (artifactMatch) {
+      const name = artifactMatch[1];
+      if (method === "GET") {
+        return handleArtifactsGet(req, res, name);
+      }
+      res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
+      return res.end("Method not allowed");
+    }
+
     const m = urlPath.match(/^\/api\/projects\/([^/]+)$/);
     if (m) {
       const id = m[1];
