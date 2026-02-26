@@ -11,7 +11,9 @@
  */
 
 const { spawnSync } = require("child_process");
+const fs = require("fs");
 const path = require("path");
+const https = require("https");
 
 function shRaw(cmd, args, opts = {}) {
   return spawnSync(cmd, args, { encoding: "utf8", ...opts });
@@ -85,13 +87,93 @@ function printFallback({ branch, repoNwo, defaultBranch, title }) {
   info(`  gh pr create --repo ${repoNwo} --base ${defaultBranch} --head ${branch} --title "${title}" --body-file /tmp/pr.md`);
 }
 
+function runDoctor() {
+  return shNodeTool("node", ["scripts/hub-doctor.js"]);
+}
+
+function readDoctorJson() {
+  const doctorPath = path.join(process.cwd(), "doctor.json");
+  if (!fs.existsSync(doctorPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(doctorPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function printNativeBlock() {
+  const nodeVersion = (process.version || "").trim();
+  const nodeModules = process.versions && process.versions.modules ? String(process.versions.modules) : "unknown";
+  info(`[PR-UP] Node: ${nodeVersion}`);
+  info(`[PR-UP] Node modules ABI: ${nodeModules}`);
+  info("[PR-UP] Recovery (recommended):");
+  info("  volta pin node@22");
+  info("  rm -rf node_modules");
+  info("  npm install");
+}
+
+function checkNetwork(timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        method: "HEAD",
+        host: "github.com",
+        path: "/",
+        timeout: timeoutMs
+      },
+      (res) => {
+        const ok = res.statusCode && res.statusCode >= 200 && res.statusCode < 400;
+        resolve({
+          ok,
+          detail: ok ? null : `status=${res.statusCode}`
+        });
+      }
+    );
+    req.on("timeout", () => {
+      req.destroy(new Error("timeout"));
+    });
+    req.on("error", (error) => {
+      resolve({ ok: false, detail: error && error.message ? error.message : "network error" });
+    });
+    req.end();
+  });
+}
+
+function writePatchFile(branch) {
+  const patchesDir = "/tmp/patches";
+  fs.mkdirSync(patchesDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const filename = `${stamp}-${branch}.patch`;
+  const target = path.join(patchesDir, filename);
+  const diff = must("git", ["diff", "--binary", "HEAD"]);
+  fs.writeFileSync(target, diff, "utf8");
+  return target;
+}
+
 function must(cmd, args, opts = {}) {
   const r = shNodeTool(cmd, args, opts);
   if (r.status !== 0) failWithCommand(cmd, args, r, 20);
   return (r.stdout || "").trim();
 }
 
-function main() {
+async function main() {
+  const doctorRun = runDoctor();
+  const doctor = readDoctorJson();
+  if (!doctorRun || doctorRun.status !== 0 || !doctor) {
+    const reason = doctorRun && doctorRun.status !== 0
+      ? `hub-doctor.js failed (code=${doctorRun.status})`
+      : "doctor.json missing or invalid";
+    info(`[PR-UP] ${reason}. Aborting before npm test/push/gh.`);
+    printNativeBlock();
+    process.exit(1);
+  }
+  const nativeStatus = doctor && doctor.native && doctor.native.better_sqlite3;
+  if (nativeStatus && nativeStatus.ok === false) {
+    info("[PR-UP] native.better_sqlite3.ok=false detected in doctor.json. Aborting before npm test/push/gh.");
+    printNativeBlock();
+    process.exit(1);
+  }
+
   const branch = must("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
   if (branch === "main" || branch === "master") {
     warn(`[PR-UP] REFUSED: current branch is ${branch}. Create a feature branch first.`);
@@ -116,6 +198,21 @@ function main() {
   const verifyRes = shNodeTool("node", ["scripts/pr-body-verify.js", "/tmp/pr.md"]);
   if (verifyRes.status !== 0) {
     warn((verifyRes.stderr || verifyRes.stdout || "").trim());
+    process.exit(1);
+  }
+
+  const netCheck = await checkNetwork(3000);
+  if (!netCheck.ok) {
+    const detail = netCheck.detail || "(詳細なし)";
+    info(`[PR-UP] NET_NG: ネットワーク到達不可 (${detail})`);
+    const patchPath = writePatchFile(branch);
+    info(`[PR-UP] パッチを作成しました: ${patchPath}`);
+    info("[PR-UP] NET_OK な端末で以下を実行してください:");
+    info(`  git checkout ${branch}`);
+    info(`  git apply ${patchPath}`);
+    info("  npm test");
+    info(`  git push -u origin ${branch}`);
+    info(`  gh pr create --repo ${repoNwo} --base ${defaultBranch} --head ${branch} --title "${title}" --body-file /tmp/pr.md`);
     process.exit(1);
   }
 
@@ -155,9 +252,7 @@ function main() {
   }
 }
 
-try {
-  main();
-} catch (error) {
+main().catch((error) => {
   process.stderr.write(`[PR-UP] FAILED: ${error && error.message ? error.message : String(error)}\n`);
   process.exit(1);
-}
+});

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/server/server.js",
+    "start": "node server.js",
     "test": "node scripts/selftest.js",
     "cleanup:runs": "node scripts/cleanup-runs.js",
     "check:structure": "node scripts/check-structure.js",
