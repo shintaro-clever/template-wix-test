@@ -5,5 +5,6 @@ const db = openDb();
 module.exports = {
   db,
   openDb,
+  initDB: openDb,
   DEFAULT_TENANT,
 };
