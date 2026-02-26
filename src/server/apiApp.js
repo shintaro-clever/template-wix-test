@@ -12,6 +12,7 @@ const {
   patchProject,
   deleteProject,
 } = require("../api/projects");
+const { listRuns, createRun } = require("../api/runs");
 const { handleProjectRunsPost } = require("../routes/runs");
 const { handleAuthLogin } = require("../routes/auth");
 const { handleArtifactsPost, handleArtifactsGet } = require("../routes/artifacts");
@@ -81,6 +82,32 @@ function createApiServer(dbConn) {
 
         const created = createProject(db, body.name.trim(), body.staging_url.trim(), req.user?.id);
         return sendJson(res, 201, created);
+      }
+
+      // GET/POST /api/runs
+      if (urlPath === "/api/runs") {
+        if (method === "GET") {
+          return sendJson(res, 200, listRuns(db));
+        }
+        if (method === "POST") {
+          let body;
+          try {
+            body = await readJsonBody(req);
+          } catch {
+            return jsonError(res, 400, "VALIDATION_ERROR", "JSONが不正です");
+          }
+          const jobType = typeof body.job_type === "string" ? body.job_type.trim() : "";
+          const targetPath = typeof body.target_path === "string" ? body.target_path.trim() : "";
+          if (!jobType || !targetPath) {
+            return jsonError(res, 400, "VALIDATION_ERROR", "入力が不正です");
+          }
+          const inputs =
+            body && typeof body.inputs === "object" && body.inputs !== null ? body.inputs : {};
+          const runId = createRun(db, { job_type: jobType, inputs, target_path: targetPath });
+          return sendJson(res, 201, { run_id: runId, status: "queued" });
+        }
+        res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
+        return res.end("Method not allowed");
       }
 
       // /api/projects/:id

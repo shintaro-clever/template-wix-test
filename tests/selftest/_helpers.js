@@ -39,12 +39,12 @@ function requestLocal(handler, { method = "GET", url = "/", headers = {}, body =
         res.write(chunk);
       }
       res.emit("finish");
-      return true;
       resolve({
         statusCode,
         headers: resHeaders,
         body: Buffer.concat(chunks),
       });
+      return true;
     };
     res.on("error", reject);
 

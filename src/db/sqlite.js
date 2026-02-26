@@ -73,6 +73,12 @@ function ensureRunColumns(db) {
   if (!columns.includes("failure_code")) {
     db.exec("ALTER TABLE runs ADD COLUMN failure_code TEXT");
   }
+  if (!columns.includes("job_type")) {
+    db.exec("ALTER TABLE runs ADD COLUMN job_type TEXT");
+  }
+  if (!columns.includes("target_path")) {
+    db.exec("ALTER TABLE runs ADD COLUMN target_path TEXT");
+  }
 }
 
 module.exports = { openDb, DEFAULT_TENANT };
