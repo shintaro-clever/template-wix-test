@@ -41,7 +41,13 @@ function resolveProjectRunTargetPath(inputsJson, runId) {
 function createRun(db, projectId, inputsJson) {
   const runId = crypto.randomUUID();
   const ts = nowIso();
-  const targetPath = resolveProjectRunTargetPath(inputsJson, runId);
+  const inputsToStore = {
+    ...(inputsJson || {}),
+  };
+  if (projectId && !inputsToStore.project_id) {
+    inputsToStore.project_id = projectId;
+  }
+  const targetPath = resolveProjectRunTargetPath(inputsToStore, runId);
   withRetry(() =>
     db.prepare(
       "INSERT INTO runs(tenant_id,id,project_id,status,inputs_json,job_type,target_path,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)"
@@ -50,7 +56,7 @@ function createRun(db, projectId, inputsJson) {
       runId,
       projectId,
       "queued",
-      JSON.stringify(inputsJson),
+      JSON.stringify(inputsToStore),
       PROJECT_RUN_JOB_TYPE,
       targetPath,
       ts,
