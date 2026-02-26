@@ -61,10 +61,27 @@ function openDb() {
       event_type TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      tenant_id  TEXT NOT NULL,
+      actor_id   TEXT,
+      action     TEXT NOT NULL,
+      meta_json  TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS job_templates (
+      name                  TEXT NOT NULL,
+      direction             TEXT NOT NULL,
+      required_mode         TEXT NOT NULL,
+      required_capabilities TEXT NOT NULL,
+      required_inputs       TEXT NOT NULL,
+      description           TEXT,
+      PRIMARY KEY (name)
+    );
     CREATE INDEX IF NOT EXISTS runs_project_status
       ON runs(tenant_id, project_id, status);
   `);
   ensureRunColumns(db);
+  ensureJobTemplates(db);
   return db;
 }
 
@@ -79,6 +96,67 @@ function ensureRunColumns(db) {
   if (!columns.includes("target_path")) {
     db.exec("ALTER TABLE runs ADD COLUMN target_path TEXT");
   }
+}
+
+function ensureJobTemplates(db) {
+  const hasTable = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='job_templates'")
+    .get();
+  if (!hasTable) {
+    return;
+  }
+  const existing = db.prepare("SELECT name FROM job_templates").all().map((row) => row.name);
+  const existingSet = new Set(existing);
+  const templates = [
+    {
+      name: "figma_read",
+      direction: "inbound",
+      required_mode: "remote",
+      required_capabilities: ["read"],
+      required_inputs: [],
+      description: "Figma read",
+    },
+    {
+      name: "figma_plan",
+      direction: "inbound",
+      required_mode: "remote",
+      required_capabilities: ["read"],
+      required_inputs: [],
+      description: "Figma plan",
+    },
+    {
+      name: "figma_apply",
+      direction: "inbound",
+      required_mode: "remote",
+      required_capabilities: ["read", "apply"],
+      required_inputs: [],
+      description: "Figma apply",
+    },
+    {
+      name: "figma_verify",
+      direction: "inbound",
+      required_mode: "remote",
+      required_capabilities: ["read", "verify"],
+      required_inputs: [],
+      description: "Figma verify",
+    },
+  ];
+  const insert = db.prepare(
+    "INSERT INTO job_templates(name,direction,required_mode,required_capabilities,required_inputs,description) VALUES(?,?,?,?,?,?)"
+  );
+  templates.forEach((tpl) => {
+    if (existingSet.has(tpl.name)) {
+      return;
+    }
+    insert.run(
+      tpl.name,
+      tpl.direction,
+      tpl.required_mode,
+      JSON.stringify(tpl.required_capabilities),
+      JSON.stringify(tpl.required_inputs),
+      tpl.description
+    );
+  });
 }
 
 module.exports = { openDb, DEFAULT_TENANT };
