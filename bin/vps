@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOST="${IH_VPS_HOST:-hubapp@210.131.210.190}"
+exec ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3 "$HOST" "$@"
