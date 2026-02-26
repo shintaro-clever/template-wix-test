@@ -15,12 +15,16 @@ function validateTargetPath(raw) {
   if (typeof raw !== 'string') {
     return invalidResponse();
   }
-
-  const normalized = path.normalize(raw);
-
-  if (normalized.includes('..')) {
+  if (raw.trim().length === 0) {
     return invalidResponse();
   }
+
+  const segments = raw.split(/[\\/]+/);
+  if (segments.some((segment) => segment === '..')) {
+    return invalidResponse();
+  }
+
+  const normalized = path.normalize(raw);
 
   if (path.isAbsolute(normalized)) {
     return invalidResponse();
