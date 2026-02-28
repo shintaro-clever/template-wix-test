@@ -10,7 +10,7 @@ const { callFigmaApi, normalizeDepth, sanitizeQuery } = require('../src/figma/ap
 const { buildCodexPrompt } = require('../src/codex/prompt');
 const { resolveHostPort } = require('../src/server/config');
 const { createApp } = require('../src/server/app');
-const { extractSameOriginLinks, normalizePageUrl } = require('./run-job');
+const { extractSameOriginLinks, normalizePageUrl, extractTextFromHtml, buildFigmaFramePayload } = require('./run-job');
 const { runJobClient } = require('../src/runner/runJobClient');
 const { run: runMcpAdapter } = require('../src/runnerAdapter');
 const {
@@ -495,6 +495,46 @@ function verifyCodeToFigmaPageCollectionFixture() {
   });
 }
 
+function verifyCodeToFigmaTextClassificationStability() {
+  const html = [
+    '<html><body>',
+    '<h2 style="font-size:12px">Heading One</h2>',
+    '<a href="/docs">Read Docs</a>',
+    '<button>Save</button>',
+    '<label>Email</label>',
+    '<input aria-label="Search Box" />',
+    '<p style="font-size:42px;font-weight:900">Big paragraph but still body</p>',
+    '</body></html>'
+  ].join('');
+  const blocks = extractTextFromHtml(html, 16);
+  assert(Array.isArray(blocks) && blocks.length >= 6, 'text blocks should be extracted');
+  const byText = new Map(blocks.map((entry) => [entry.text, entry.role]));
+  assert(byText.get('Heading One') === 'Heading', 'h1-h6 should map to Heading only');
+  assert(byText.get('Read Docs') === 'Link', 'a should map to Link only');
+  assert(byText.get('Save') === 'Label', 'button should map to Label');
+  assert(byText.get('Email') === 'Label', 'label should map to Label');
+  assert(byText.get('Search Box') === 'Label', 'aria-label text should map to Label');
+  assert(byText.get('Big paragraph but still body') === 'Body', 'style should not promote Body to Heading');
+
+  const payload = buildFigmaFramePayload({
+    page_url: 'https://example.com',
+    title: 'Classification',
+    text_blocks: blocks
+  });
+  const frame = payload && payload.frame ? payload.frame : {};
+  const sections = Array.isArray(frame.children)
+    ? frame.children.filter((node) => node && /^Section \d{2}$/.test(String(node.name)))
+    : [];
+  const names = sections
+    .map((section) => (Array.isArray(section.children) ? section.children : []))
+    .flat()
+    .map((node) => String(node && node.name || ''));
+  assert(names.includes('Heading'), 'payload should include Heading classified text');
+  assert(names.includes('Link'), 'payload should include Link classified text');
+  assert(names.includes('Label'), 'payload should include Label classified text');
+  assert(names.includes('Body'), 'payload should include Body classified text');
+}
+
 function verifyCodeToFigmaProgressLogs() {
   const tmpJobPath = path.join(os.tmpdir(), `sample-job.code_to_figma.progress.${Date.now()}.json`);
   const payload = {
@@ -647,6 +687,11 @@ function verifyCodeToFigmaMcpLocalStubFrames() {
     assert(fs.existsSync(summaryPath), 'summary.md must exist for mcp local_stub run');
     const summary = fs.readFileSync(summaryPath, 'utf8');
     assert(summary.includes('mcp_attempt: { status: ok, reason: - }'), 'summary should record successful mcp attempt');
+    assert(summary.includes('transform_stats:'), 'summary should include transform_stats');
+    assert(summary.includes('text_counts:'), 'summary should include text_counts');
+    assert(summary.includes('node_counts:'), 'summary should include node_counts');
+    assert(summary.includes('layout_counts:'), 'summary should include layout_counts');
+    assert(summary.includes('spacing_profile:'), 'summary should include spacing_profile');
     const frameLines = summary
       .split(/\r?\n/)
       .filter((line) => line.includes('- frames[]:') && line.includes('status: success'));
@@ -655,15 +700,83 @@ function verifyCodeToFigmaMcpLocalStubFrames() {
     assert(fs.existsSync(mcpReportPath), 'code_to_figma_mcp_report.json must exist');
     const mcpReport = JSON.parse(fs.readFileSync(mcpReportPath, 'utf8'));
     const codeToFigma = mcpReport && mcpReport.code_to_figma ? mcpReport.code_to_figma : {};
+    assert(codeToFigma && typeof codeToFigma.text_counts === 'object', 'mcp report should include text_counts');
+    assert(codeToFigma && typeof codeToFigma.node_counts === 'object', 'mcp report should include node_counts');
+    assert(codeToFigma && typeof codeToFigma.layout_counts === 'object', 'mcp report should include layout_counts');
+    assert(codeToFigma && typeof codeToFigma.spacing_profile === 'object', 'mcp report should include spacing_profile');
+    const transformStats = codeToFigma && typeof codeToFigma.transform_stats === 'object' ? codeToFigma.transform_stats : null;
+    assert(transformStats, 'mcp report should include transform_stats');
+    assert(Number(transformStats.frames_pruned || 0) >= 1, 'transform_stats.frames_pruned should be >= 1');
+    assert(Number(transformStats.frames_kept || 0) >= 1, 'transform_stats.frames_kept should be >= 1');
     const payloads = Array.isArray(codeToFigma.frame_payloads) ? codeToFigma.frame_payloads : [];
     assert(payloads.length >= 1, 'mcp report should include frame_payloads');
     const firstPayload = payloads[0] && payloads[0].payload ? payloads[0].payload : {};
     const firstFrame = firstPayload && firstPayload.frame ? firstPayload.frame : {};
     assert(firstFrame.layoutMode === 'VERTICAL', 'mcp payload page frame should include vertical auto layout');
-    const sections = Array.isArray(firstFrame.children) ? firstFrame.children.filter((node) => /^Section \d{2}$/.test(String(node && node.name))) : [];
+    assert(firstFrame.paddingTop === 24 && firstFrame.itemSpacing === 24, 'page frame spacing should be fixed to 24/24');
+    const children = Array.isArray(firstFrame.children) ? firstFrame.children : [];
+    const sections = children.filter((node) => /^Section \d{2}$/.test(String(node && node.name)));
     assert(sections.length >= 2, 'mcp payload should include section frames');
     sections.forEach((section) => {
       assert(section.layoutMode === 'VERTICAL', 'mcp payload section should include vertical auto layout');
+      assert(section.paddingTop === 16 && section.itemSpacing === 16, 'section spacing should be fixed to 16/16');
+    });
+    const containerNames = ['Header', 'Hero', 'Footer'];
+    containerNames.forEach((name) => {
+      const container = children.find((node) => node && node.name === name);
+      assert(container, `mcp payload should include ${name} frame`);
+      assert(container.layoutMode === 'VERTICAL', `${name} frame should include vertical auto layout`);
+      if (name === 'Hero') {
+        assert(container.paddingTop === 24 && container.itemSpacing === 16, 'Hero spacing should be fixed to 24/16');
+      } else {
+        assert(container.paddingTop === 16 && container.itemSpacing === 12, `${name} spacing should be fixed to 16/12`);
+      }
+      const inner = Array.isArray(container.children) ? container.children : [];
+      assert(inner.length >= 1, `${name} should keep inner nodes after prune`);
+      if (name === 'Header') {
+        const nav = inner.find((node) => node && node.name === 'Nav');
+        assert(nav, 'Header should include Nav frame');
+        assert(nav.layoutMode === 'HORIZONTAL', 'Nav should use horizontal auto layout');
+        assert(nav.itemSpacing === 12, 'Nav spacing should be fixed to 12');
+        const navItems = Array.isArray(nav.children) ? nav.children : [];
+        assert(navItems.length >= 1, 'Nav should include direct items');
+        navItems.forEach((node) => {
+          assert(!('layoutMode' in (node || {})), 'Nav direct items should not be modified with auto layout');
+        });
+      } else if (name !== 'Hero') {
+        assert(!inner.some((node) => String((node && node.name) || '').includes('Wrapper')), `${name} decorative wrapper should be pruned`);
+        inner.forEach((node) => {
+          assert(!('layoutMode' in (node || {})), `${name} inner nodes should not be modified with auto layout`);
+        });
+      }
+      if (name === 'Hero') {
+        const heroCta = inner.find((group) => {
+          if (!group || group.type !== 'FRAME') return false;
+          const groupChildren = Array.isArray(group.children) ? group.children : [];
+          const ctaCount = groupChildren.filter((node) => node && node.type === 'TEXT' && (node.name === 'Link' || node.name === 'Label')).length;
+          return ctaCount >= 2;
+        });
+        assert(heroCta, 'Hero should include CTA group candidate');
+        assert(heroCta.layoutMode === 'HORIZONTAL', 'Hero CTA group should use horizontal auto layout');
+        assert(heroCta.itemSpacing === 12, 'Hero CTA group spacing should be fixed to 12');
+        inner.forEach((group) => {
+          if (!group || group === heroCta) return;
+          assert(!('layoutMode' in group), 'Hero non-CTA direct groups should not be modified with auto layout');
+        });
+      }
+    });
+    const nonNavHorizontal = children.filter((node) => node && node.layoutMode === 'HORIZONTAL' && node.name !== 'Nav');
+    assert(nonNavHorizontal.length === 0, 'only Nav should be horizontal at top-level payload');
+    const metrics = codeToFigma && typeof codeToFigma.layout_counts === 'object' ? codeToFigma.layout_counts : {};
+    assert(Number(metrics.horizontal_nodes || 0) >= 1, 'layout_counts.horizontal_nodes should include Nav');
+    assert(Number(metrics.hero_cta_rows || 0) >= 1, 'layout_counts.hero_cta_rows should include Hero CTA row');
+    children.forEach((node) => {
+      if (!node || node.type !== 'FRAME') return;
+      const frameName = String(node.name || '');
+      const shouldHaveLayout = /^Section \d{2}$/.test(frameName) || containerNames.includes(frameName);
+      if (!shouldHaveLayout) {
+        assert(!('layoutMode' in node), `non-target frame ${frameName} must not receive auto layout`);
+      }
     });
   } finally {
     try {
@@ -712,6 +825,10 @@ function verifyCodeToFigmaMcpProviderSchemaInvariant() {
       const summaryPath = path.join(RUNS_ROOT, runId, 'summary.md');
       assert(fs.existsSync(summaryPath), `${provider} summary.md must exist`);
       const summary = fs.readFileSync(summaryPath, 'utf8');
+      assert(summary.includes('text_counts:'), `${provider} summary should include text_counts`);
+      assert(summary.includes('node_counts:'), `${provider} summary should include node_counts`);
+      assert(summary.includes('layout_counts:'), `${provider} summary should include layout_counts`);
+      assert(summary.includes('spacing_profile:'), `${provider} summary should include spacing_profile`);
       const frameLine = summary
         .split(/\r?\n/)
         .find((line) => line.includes('- frames[]:') && line.includes('status: success'));
@@ -792,6 +909,202 @@ async function verifyCodexCliSafetyRails() {
       blockedNetwork.checks.some((entry) => entry && entry.ok === false && entry.reason === 'codex_cli_network_policy_blocked'),
     'codex-cli blocked network should report codex_cli_network_policy_blocked'
   );
+}
+
+function verifyCodeToFigmaMcpLinkStats() {
+  const fixturePath = path.join(__dirname, '..', 'tests', 'selftest', 'fixtures', 'internal_links.html');
+  assert(fs.existsSync(fixturePath), 'internal links fixture should exist');
+  const pageHtml = fs.readFileSync(fixturePath, 'utf8');
+  const tmpJobPath = path.join(os.tmpdir(), `sample-job.code_to_figma.mcp_links.${Date.now()}.json`);
+  const payload = {
+    job_type: 'integration_hub.phase1.code_to_figma_from_url',
+    goal: 'code to figma mcp link stats selftest',
+    inputs: {
+      message: 'code to figma mcp links',
+      target_path: '.ai-runs/{{run_id}}/code_to_figma_report.json',
+      page_url: 'https://example.com/',
+      pages: ['https://example.com/about', 'https://example.com/pricing'],
+      page_html: pageHtml,
+      figma_file_key: 'CutkQD2XudkCe8eJ1jDfkZ',
+      mcp_provider: 'local_stub',
+      layout_minimal: true
+    },
+    constraints: {
+      allowed_paths: ['.ai-runs/'],
+      max_files_changed: 1,
+      no_destructive_ops: true
+    },
+    acceptance_criteria: ['internal links are mapped only when page exists'],
+    provenance: {
+      issue: '',
+      operator: 'operator'
+    },
+    run_mode: 'mcp',
+    output_language: 'ja',
+    expected_artifacts: [
+      { name: 'code_to_figma_report.json', description: 'report' },
+      { name: 'summary.md', description: 'summary' }
+    ]
+  };
+  fs.writeFileSync(tmpJobPath, JSON.stringify(payload, null, 2), 'utf8');
+  try {
+    const { result, runId } = runJobWithRunId(tmpJobPath, {});
+    assert(result.status === 'ok', 'mcp local_stub links run should succeed');
+    const summaryPath = path.join(RUNS_ROOT, runId, 'summary.md');
+    assert(fs.existsSync(summaryPath), 'summary should exist for link stats run');
+    const summary = fs.readFileSync(summaryPath, 'utf8');
+    assert(summary.includes('link_stats:'), 'summary should include link_stats');
+    assert(summary.includes('links_total: 4'), 'summary link_stats should count all a[href]');
+    assert(summary.includes('links_internal: 3'), 'summary link_stats should count same-origin links');
+    assert(summary.includes('links_mapped: 2'), 'summary link_stats should count mapped links');
+
+    const reportPath = path.join(RUNS_ROOT, runId, 'code_to_figma_mcp_report.json');
+    assert(fs.existsSync(reportPath), 'code_to_figma_mcp_report.json should exist for link stats run');
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    const c2f = report && report.code_to_figma ? report.code_to_figma : {};
+    assert(c2f.link_stats && c2f.link_stats.links_mapped === 2, 'mcp report links_mapped should be 2');
+    const payloads = Array.isArray(c2f.frame_payloads) ? c2f.frame_payloads : [];
+    const firstPayload = payloads[0] && payloads[0].payload ? payloads[0].payload : {};
+    const prototypeLinks = Array.isArray(firstPayload.prototype_links) ? firstPayload.prototype_links : [];
+    assert(prototypeLinks.length === 2, 'mapped prototype links should be attached to source page payload');
+  } finally {
+    try {
+      fs.unlinkSync(tmpJobPath);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function verifyCodeToFigmaSectionSplitStability() {
+  const fixturePath = path.join(__dirname, '..', 'tests', 'selftest', 'fixtures', 'main_structure_sections.html');
+  assert(fs.existsSync(fixturePath), 'main structure fixture should exist');
+  const pageHtml = fs.readFileSync(fixturePath, 'utf8');
+  const tmpJobPath = path.join(os.tmpdir(), `sample-job.code_to_figma.mcp_sections.${Date.now()}.json`);
+  const payload = {
+    job_type: 'integration_hub.phase1.code_to_figma_from_url',
+    goal: 'code to figma section split stability selftest',
+    inputs: {
+      message: 'code to figma sections',
+      target_path: '.ai-runs/{{run_id}}/code_to_figma_report.json',
+      page_url: 'https://example.com/',
+      pages: ['https://example.com/about'],
+      page_html: pageHtml,
+      figma_file_key: 'CutkQD2XudkCe8eJ1jDfkZ',
+      mcp_provider: 'local_stub',
+      layout_minimal: true
+    },
+    constraints: {
+      allowed_paths: ['.ai-runs/'],
+      max_files_changed: 1,
+      no_destructive_ops: true
+    },
+    acceptance_criteria: ['main direct structural tags stabilize section split'],
+    provenance: {
+      issue: '',
+      operator: 'operator'
+    },
+    run_mode: 'mcp',
+    output_language: 'ja',
+    expected_artifacts: [
+      { name: 'code_to_figma_report.json', description: 'report' },
+      { name: 'summary.md', description: 'summary' }
+    ]
+  };
+  fs.writeFileSync(tmpJobPath, JSON.stringify(payload, null, 2), 'utf8');
+  try {
+    const { result, runId } = runJobWithRunId(tmpJobPath, {});
+    assert(result.status === 'ok', 'section split run should succeed');
+    const reportPath = path.join(RUNS_ROOT, runId, 'code_to_figma_mcp_report.json');
+    assert(fs.existsSync(reportPath), 'section split mcp report should exist');
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    const c2f = report && report.code_to_figma ? report.code_to_figma : {};
+    const payloads = Array.isArray(c2f.frame_payloads) ? c2f.frame_payloads : [];
+    const firstPayload = payloads[0] && payloads[0].payload ? payloads[0].payload : {};
+    const frame = firstPayload && firstPayload.frame ? firstPayload.frame : {};
+    const children = Array.isArray(frame.children) ? frame.children : [];
+    const sections = children.filter((node) => node && /^Section \d{2}$/.test(String(node.name)));
+    assert(sections.length === 4, 'section split should follow main direct header/nav/section/footer count');
+    assert(!sections.some((node) => /header|nav|footer/i.test(String(node.name || ''))), 'section frame names should keep numbering vocabulary only');
+  } finally {
+    try {
+      fs.unlinkSync(tmpJobPath);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function verifyCodeToFigmaImageLabeling() {
+  const fixturePath = path.join(__dirname, '..', 'tests', 'selftest', 'fixtures', 'image_labels.html');
+  assert(fs.existsSync(fixturePath), 'image labels fixture should exist');
+  const pageHtml = fs.readFileSync(fixturePath, 'utf8');
+  const tmpJobPath = path.join(os.tmpdir(), `sample-job.code_to_figma.mcp_images.${Date.now()}.json`);
+  const payload = {
+    job_type: 'integration_hub.phase1.code_to_figma_from_url',
+    goal: 'code to figma image labeling selftest',
+    inputs: {
+      message: 'code to figma image labels',
+      target_path: '.ai-runs/{{run_id}}/code_to_figma_report.json',
+      page_url: 'https://example.com/',
+      pages: ['https://example.com/about'],
+      page_html: pageHtml,
+      figma_file_key: 'CutkQD2XudkCe8eJ1jDfkZ',
+      mcp_provider: 'local_stub',
+      layout_minimal: true
+    },
+    constraints: {
+      allowed_paths: ['.ai-runs/'],
+      max_files_changed: 1,
+      no_destructive_ops: true
+    },
+    acceptance_criteria: ['image placeholders are labeled only by alt/aria-label'],
+    provenance: {
+      issue: '',
+      operator: 'operator'
+    },
+    run_mode: 'mcp',
+    output_language: 'ja',
+    expected_artifacts: [
+      { name: 'code_to_figma_report.json', description: 'report' },
+      { name: 'summary.md', description: 'summary' }
+    ]
+  };
+  fs.writeFileSync(tmpJobPath, JSON.stringify(payload, null, 2), 'utf8');
+  try {
+    const { result, runId } = runJobWithRunId(tmpJobPath, {});
+    assert(result.status === 'ok', 'image labeling run should succeed');
+    const summaryPath = path.join(RUNS_ROOT, runId, 'summary.md');
+    assert(fs.existsSync(summaryPath), 'image labeling summary should exist');
+    const summary = fs.readFileSync(summaryPath, 'utf8');
+    assert(summary.includes('image_stats:'), 'summary should include image_stats');
+    assert(summary.includes('images_total: 3'), 'summary image_stats should count images');
+    assert(summary.includes('images_labeled: 2'), 'summary image_stats should count labeled images');
+
+    const reportPath = path.join(RUNS_ROOT, runId, 'code_to_figma_mcp_report.json');
+    assert(fs.existsSync(reportPath), 'image labeling mcp report should exist');
+    const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+    const c2f = report && report.code_to_figma ? report.code_to_figma : {};
+    assert(c2f.image_stats && c2f.image_stats.images_total === 3, 'report image_stats.images_total should be 3');
+    assert(c2f.image_stats && c2f.image_stats.images_labeled === 2, 'report image_stats.images_labeled should be 2');
+    const payloads = Array.isArray(c2f.frame_payloads) ? c2f.frame_payloads : [];
+    const frame = payloads[0] && payloads[0].payload ? payloads[0].payload.frame : {};
+    const hero = Array.isArray(frame.children) ? frame.children.find((node) => node && node.name === 'Hero') : null;
+    const heroChildren = hero && Array.isArray(hero.children) ? hero.children : [];
+    const imageRects = heroChildren.filter((node) => node && node.type === 'RECTANGLE' && String(node.name || '').startsWith('Image'));
+    assert(imageRects.length === 3, 'hero should include three img-derived rectangles');
+    const names = imageRects.map((node) => String(node.name || ''));
+    assert(names.some((name) => name === 'Image - Main visual banner for spring ca'), 'alt label should be applied and truncated');
+    assert(names.some((name) => name === 'Image - Feature screenshot'), 'aria-label should be applied');
+    assert(names.some((name) => name === 'Image'), 'no-label image should remain generic Image');
+    assert(!names.some((name) => /https?:\/\//i.test(name)), 'image placeholder name must not include URL');
+  } finally {
+    try {
+      fs.unlinkSync(tmpJobPath);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 async function verifyFigmaDepthNormalization() {
@@ -1232,9 +1545,13 @@ async function main() {
   verifyCodeToFigmaSummaryGuarantee();
   verifyCodeToFigmaPageCollection();
   verifyCodeToFigmaPageCollectionFixture();
+  verifyCodeToFigmaTextClassificationStability();
   verifyCodeToFigmaProgressLogs();
   verifyCodeToFigmaMcpLocalStubFrames();
   verifyCodeToFigmaMcpProviderSchemaInvariant();
+  verifyCodeToFigmaMcpLinkStats();
+  verifyCodeToFigmaSectionSplitStability();
+  verifyCodeToFigmaImageLabeling();
   await verifyCodexCliSafetyRails();
   verifyCodexPromptHeader();
   verifyNoEnglishTemplateLeak();

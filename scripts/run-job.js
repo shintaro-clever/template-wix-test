@@ -422,18 +422,74 @@ function decodeHtmlEntities(text = '') {
     .replace(/&#39;/g, "'");
 }
 
+function extractAttrValue(attrText = '', attrName = '') {
+  if (!attrText || !attrName) {
+    return '';
+  }
+  const escaped = String(attrName).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const quoted = new RegExp(`${escaped}\\s*=\\s*\"([^\"]*)\"`, 'i');
+  const singleQuoted = new RegExp(`${escaped}\\s*=\\s*'([^']*)'`, 'i');
+  const bare = new RegExp(`${escaped}\\s*=\\s*([^\\s\"'>]+)`, 'i');
+  const q = String(attrText).match(quoted);
+  if (q && q[1]) return q[1];
+  const s = String(attrText).match(singleQuoted);
+  if (s && s[1]) return s[1];
+  const b = String(attrText).match(bare);
+  if (b && b[1]) return b[1];
+  return '';
+}
+
+function classifyTextRole({ tag = '', ariaLabel = '' } = {}) {
+  const normalizedTag = String(tag || '').toLowerCase();
+  if (normalizedTag === 'a') {
+    return 'Link';
+  }
+  if (/^h[1-6]$/.test(normalizedTag)) {
+    return 'Heading';
+  }
+  if (normalizedTag === 'button' || normalizedTag === 'label' || normalizedTag === 'input' || String(ariaLabel || '').trim()) {
+    return 'Label';
+  }
+  return 'Body';
+}
+
 function extractTextFromHtml(html = '', limit = 10) {
   const cleaned = String(html)
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ');
   const picked = [];
-  const pattern = /<(h1|h2|h3|p)[^>]*>([\s\S]*?)<\/\1>/gi;
+  const blockPattern = /<(h[1-6]|p|a|button|label)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+  const inputPattern = /<input\b([^>]*)\/?>/gi;
   let match;
-  while ((match = pattern.exec(cleaned)) && picked.length < limit) {
-    const text = decodeHtmlEntities(match[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
-    if (text) {
-      picked.push({ tag: match[1].toLowerCase(), text: text.slice(0, 180) });
+  while ((match = blockPattern.exec(cleaned)) && picked.length < limit) {
+    const tag = String(match[1] || '').toLowerCase();
+    const attrs = String(match[2] || '');
+    const ariaLabel = decodeHtmlEntities(extractAttrValue(attrs, 'aria-label')).trim();
+    const text = decodeHtmlEntities(match[3].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+    const content = text || ariaLabel;
+    if (!content) {
+      continue;
     }
+    picked.push({
+      tag,
+      role: classifyTextRole({ tag, ariaLabel }),
+      text: content.slice(0, 180)
+    });
+  }
+  while ((match = inputPattern.exec(cleaned)) && picked.length < limit) {
+    const attrs = String(match[1] || '');
+    const ariaLabel = decodeHtmlEntities(extractAttrValue(attrs, 'aria-label')).trim();
+    const value = decodeHtmlEntities(extractAttrValue(attrs, 'value')).trim();
+    const placeholder = decodeHtmlEntities(extractAttrValue(attrs, 'placeholder')).trim();
+    const content = ariaLabel || value || placeholder;
+    if (!content) {
+      continue;
+    }
+    picked.push({
+      tag: 'input',
+      role: classifyTextRole({ tag: 'input', ariaLabel }),
+      text: content.slice(0, 180)
+    });
   }
   if (picked.length > 0) {
     return picked;
@@ -442,7 +498,7 @@ function extractTextFromHtml(html = '', limit = 10) {
   if (!fallback) {
     return [];
   }
-  return [{ tag: 'body', text: fallback.slice(0, 180) }];
+  return [{ tag: 'body', role: 'Body', text: fallback.slice(0, 180) }];
 }
 
 function extractTitleFromHtml(html = '') {
@@ -579,7 +635,7 @@ function buildFigmaFramePayload(snapshot, options = {}) {
       children: [
         {
           type: 'TEXT',
-          name: block.tag && /^h[1-3]$/.test(block.tag) ? 'Heading' : 'Body',
+          name: block && typeof block.role === 'string' ? block.role : classifyTextRole({ tag: block && block.tag }),
           layoutAlign: 'STRETCH',
           characters: block.text
         }
@@ -741,6 +797,13 @@ function buildCodeToFigmaSummary({
   pages,
   frames,
   progress,
+  transformStats,
+  linkStats,
+  imageStats,
+  textCounts,
+  nodeCounts,
+  layoutCounts,
+  spacingProfile,
   figmaFileUrl,
   figmaPageUrl,
   figmaFrameUrl,
@@ -789,6 +852,47 @@ function buildCodeToFigmaSummary({
         `- progress[]: { index: ${entry.index}, url: ${entry.url}, status: ${entry.status}, reason: ${entry.reason || '-'} }`
       );
     });
+    lines.push('');
+  }
+  if (transformStats && typeof transformStats === 'object') {
+    lines.push('## Transform Stats');
+    lines.push(`- transform_stats: { frames_pruned: ${Number(transformStats.frames_pruned || 0)}, frames_kept: ${Number(transformStats.frames_kept || 0)} }`);
+    lines.push('');
+  }
+  if (linkStats && typeof linkStats === 'object') {
+    lines.push('## Link Stats');
+    lines.push(`- link_stats: { links_total: ${Number(linkStats.links_total || 0)}, links_internal: ${Number(linkStats.links_internal || 0)}, links_mapped: ${Number(linkStats.links_mapped || 0)} }`);
+    lines.push('');
+  }
+  if (imageStats && typeof imageStats === 'object') {
+    lines.push('## Image Stats');
+    lines.push(`- image_stats: { images_total: ${Number(imageStats.images_total || 0)}, images_labeled: ${Number(imageStats.images_labeled || 0)} }`);
+    lines.push('');
+  }
+  if (textCounts && typeof textCounts === 'object') {
+    lines.push('## Text Counts');
+    lines.push(`- text_counts: { Heading: ${Number(textCounts.Heading || 0)}, Body: ${Number(textCounts.Body || 0)}, Link: ${Number(textCounts.Link || 0)}, Label: ${Number(textCounts.Label || 0)} }`);
+    lines.push('');
+  }
+  if (nodeCounts && typeof nodeCounts === 'object') {
+    lines.push('## Node Counts');
+    lines.push(`- node_counts: { FRAME: ${Number(nodeCounts.FRAME || 0)}, RECT: ${Number(nodeCounts.RECT || 0)}, TEXT: ${Number(nodeCounts.TEXT || 0)} }`);
+    lines.push('');
+  }
+  if (layoutCounts && typeof layoutCounts === 'object') {
+    lines.push('## Layout Counts');
+    lines.push(`- layout_counts: { auto_layout_nodes: ${Number(layoutCounts.auto_layout_nodes || 0)}, horizontal_nodes: ${Number(layoutCounts.horizontal_nodes || 0)}, vertical_nodes: ${Number(layoutCounts.vertical_nodes || 0)}, hero_cta_rows: ${Number(layoutCounts.hero_cta_rows || 0)} }`);
+    lines.push('');
+  }
+  if (spacingProfile && typeof spacingProfile === 'object') {
+    const page = spacingProfile.Page || {};
+    const section = spacingProfile.Section || {};
+    const header = spacingProfile.Header || {};
+    const hero = spacingProfile.Hero || {};
+    const footer = spacingProfile.Footer || {};
+    const nav = spacingProfile.Nav || {};
+    lines.push('## Spacing Profile');
+    lines.push(`- spacing_profile: { Page:${page.padding || '-'} / ${page.itemSpacing || '-'}, Section:${section.padding || '-'} / ${section.itemSpacing || '-'}, Header:${header.padding || '-'} / ${header.itemSpacing || '-'}, Hero:${hero.padding || '-'} / ${hero.itemSpacing || '-'}, Footer:${footer.padding || '-'} / ${footer.itemSpacing || '-'}, Nav(H):${nav.itemSpacing || '-'} }`);
     lines.push('');
   }
   if (status === 'ok') {
@@ -1042,10 +1146,59 @@ function extractMcpCodeToFigmaPayload(result = {}) {
   const frames = Array.isArray(payload.frames) ? payload.frames : Array.isArray(result.frames) ? result.frames : [];
   const progress = Array.isArray(payload.progress) ? payload.progress : Array.isArray(result.progress) ? result.progress : [];
   const figmaLinks = payload.figma_links && typeof payload.figma_links === 'object' ? payload.figma_links : {};
+  const textCounts =
+    payload.text_counts && typeof payload.text_counts === 'object'
+      ? payload.text_counts
+      : result.text_counts && typeof result.text_counts === 'object'
+        ? result.text_counts
+        : null;
+  const nodeCounts =
+    payload.node_counts && typeof payload.node_counts === 'object'
+      ? payload.node_counts
+      : result.node_counts && typeof result.node_counts === 'object'
+        ? result.node_counts
+        : null;
+  const layoutCounts =
+    payload.layout_counts && typeof payload.layout_counts === 'object'
+      ? payload.layout_counts
+      : result.layout_counts && typeof result.layout_counts === 'object'
+        ? result.layout_counts
+        : null;
+  const spacingProfile =
+    payload.spacing_profile && typeof payload.spacing_profile === 'object'
+      ? payload.spacing_profile
+      : result.spacing_profile && typeof result.spacing_profile === 'object'
+        ? result.spacing_profile
+        : null;
+  const linkStats =
+    payload.link_stats && typeof payload.link_stats === 'object'
+      ? payload.link_stats
+      : result.link_stats && typeof result.link_stats === 'object'
+        ? result.link_stats
+        : null;
+  const imageStats =
+    payload.image_stats && typeof payload.image_stats === 'object'
+      ? payload.image_stats
+      : result.image_stats && typeof result.image_stats === 'object'
+        ? result.image_stats
+        : null;
+  const transformStats =
+    payload.transform_stats && typeof payload.transform_stats === 'object'
+      ? payload.transform_stats
+      : result.transform_stats && typeof result.transform_stats === 'object'
+        ? result.transform_stats
+        : null;
   return {
     pages,
     frames,
     progress,
+    transformStats,
+    linkStats,
+    imageStats,
+    textCounts,
+    nodeCounts,
+    layoutCounts,
+    spacingProfile,
     figmaLinks,
     reason: payload.reason || '-'
   };
@@ -1607,6 +1760,13 @@ async function executeCodeToFigmaFromUrlJob(jobPayload) {
                 pages: resolvedPages,
                 frames: frameRows,
                 progress: progressRows,
+                transformStats: mcpPayload.transformStats,
+                linkStats: mcpPayload.linkStats,
+                imageStats: mcpPayload.imageStats,
+                textCounts: mcpPayload.textCounts,
+                nodeCounts: mcpPayload.nodeCounts,
+                layoutCounts: mcpPayload.layoutCounts,
+                spacingProfile: mcpPayload.spacingProfile,
                 mcpAttempt,
                 figmaFileUrl: mcpPayload.figmaLinks.file || '-',
                 figmaPageUrl: mcpPayload.figmaLinks.page || '-',
@@ -1620,6 +1780,13 @@ async function executeCodeToFigmaFromUrlJob(jobPayload) {
                 pages: resolvedPages.map((url, index) => ({ index: index + 1, url })),
                 frames: frameRows,
                 progress: progressRows,
+                transform_stats: mcpPayload.transformStats || undefined,
+                link_stats: mcpPayload.linkStats || undefined,
+                image_stats: mcpPayload.imageStats || undefined,
+                text_counts: mcpPayload.textCounts || undefined,
+                node_counts: mcpPayload.nodeCounts || undefined,
+                layout_counts: mcpPayload.layoutCounts || undefined,
+                spacing_profile: mcpPayload.spacingProfile || undefined,
                 naming: { naming_version: PHASE1_NAMING_VERSION },
                 mcp_attempt: mcpAttempt
               });
@@ -2308,5 +2475,7 @@ if (require.main === module) {
 module.exports = {
   extractSameOriginLinks,
   buildCodeToFigmaSummary,
-  normalizePageUrl
+  normalizePageUrl,
+  extractTextFromHtml,
+  buildFigmaFramePayload
 };

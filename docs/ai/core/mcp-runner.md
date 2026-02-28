@@ -9,6 +9,14 @@
 - Secret policy:
   - Do not record secret values in docs/logs/issues/PRs. Record only presence/length when needed.
 
+### P0-06 API Contract (Fixed)
+- Login payload for `POST /api/auth/login` is fixed to `{ "id": "...", "password": "..." }`.
+- `username` is not a valid login field for this API contract.
+- Run create (`POST /api/runs`) requires `target_path` at the top level (in addition to `inputs.target_path` if used by the job).
+- Run status tracking is done via `GET /api/runs` list polling and matching `run_id` (no per-run `GET /api/runs/:id` contract).
+- `queued` runs are actually executed only when the API server starts with `RUNNER_MODE=inline`; this is the path that produces `.ai-runs/<run_id>/...` artifacts.
+- `JWT_SECRET` is mandatory for auth flow; without a valid value, login may fail.
+
 ### Minimal Execution Example (Auth + Run + Artifacts)
 ```bash
 BASE="http://127.0.0.1:3001"
