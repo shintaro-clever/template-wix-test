@@ -14,6 +14,7 @@ const ALLOWED_SPAWN_COMMANDS = new Set(['node', 'npx', 'git', 'php', 'codex']);
 const SPAWN_ENV_ALLOWLIST = ['PATH', 'HOME', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'];
 const MAX_SPAWN_CAPTURE = 4000;
 const CODEX_SHELL_WARNING = 'Shell snapshot validation failed';
+const PHASE1_NAMING_VERSION = 'p1-04.v1';
 const FIGMA_DEBUG_ENABLED = /^(1|true|yes)$/i.test(String(process.env.FIGMA_DEBUG || ''));
 function formatFigmaRequestLog(label, debugInfo) {
   if (!FIGMA_DEBUG_ENABLED || !debugInfo) {
@@ -409,6 +410,613 @@ function buildFigmaCommentMessage({ pageName, frames, runId, repoRef }) {
     lines.push(`… and ${frames.length - 10} more`);
   }
   return `${header}\nFrames:\n${lines.join('\n')}`;
+}
+
+function decodeHtmlEntities(text = '') {
+  return String(text)
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+}
+
+function extractTextFromHtml(html = '', limit = 10) {
+  const cleaned = String(html)
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ');
+  const picked = [];
+  const pattern = /<(h1|h2|h3|p)[^>]*>([\s\S]*?)<\/\1>/gi;
+  let match;
+  while ((match = pattern.exec(cleaned)) && picked.length < limit) {
+    const text = decodeHtmlEntities(match[2].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+    if (text) {
+      picked.push({ tag: match[1].toLowerCase(), text: text.slice(0, 180) });
+    }
+  }
+  if (picked.length > 0) {
+    return picked;
+  }
+  const fallback = decodeHtmlEntities(cleaned.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+  if (!fallback) {
+    return [];
+  }
+  return [{ tag: 'body', text: fallback.slice(0, 180) }];
+}
+
+function extractTitleFromHtml(html = '') {
+  const match = String(html).match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+  if (!match) {
+    return 'Untitled Page';
+  }
+  const title = decodeHtmlEntities(match[1].replace(/\s+/g, ' ').trim());
+  return title || 'Untitled Page';
+}
+
+function buildDomSnapshot(pageUrl, html, responseMeta = {}) {
+  const blocks = extractTextFromHtml(html, 12);
+  return {
+    page_url: pageUrl,
+    fetched_at: new Date().toISOString(),
+    html_length: String(html || '').length,
+    title: extractTitleFromHtml(html),
+    text_blocks: blocks,
+    response: {
+      status: responseMeta.status || null,
+      content_type: responseMeta.contentType || ''
+    }
+  };
+}
+
+function shortTitleForFrame(title = '') {
+  const normalized = String(title || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+  return normalized.slice(0, 24);
+}
+
+function pageFrameName(pageIndex = 1, title = '') {
+  const number = String(pageIndex).padStart(2, '0');
+  const short = shortTitleForFrame(title);
+  return short ? `Page ${number} - ${short}` : `Page ${number}`;
+}
+
+const PAGE_AUTO_LAYOUT = {
+  layoutMode: 'VERTICAL',
+  primaryAxisSizingMode: 'AUTO',
+  counterAxisSizingMode: 'FIXED',
+  paddingTop: 24,
+  paddingRight: 32,
+  paddingBottom: 24,
+  paddingLeft: 32,
+  itemSpacing: 12
+};
+
+const SECTION_AUTO_LAYOUT = {
+  layoutMode: 'VERTICAL',
+  primaryAxisSizingMode: 'AUTO',
+  counterAxisSizingMode: 'FIXED',
+  paddingTop: 16,
+  paddingRight: 16,
+  paddingBottom: 16,
+  paddingLeft: 16,
+  itemSpacing: 8
+};
+
+function buildFigmaFramePayload(snapshot, options = {}) {
+  const pageIndex = Number.isFinite(Number(options.pageIndex)) ? Number(options.pageIndex) : 1;
+  const width = 1200;
+  const baseY = 340;
+  const blocks = Array.isArray(snapshot.text_blocks) ? snapshot.text_blocks : [];
+  const sections = blocks.slice(0, 8);
+  const children = [
+    {
+      type: 'RECTANGLE',
+      name: 'Hero',
+      x: 0,
+      y: 0,
+      width: width - 64,
+      height: 220,
+      layoutAlign: 'STRETCH',
+      fills: [{ type: 'SOLID', color: { r: 0.97, g: 0.98, b: 1 } }]
+    },
+    {
+      type: 'TEXT',
+      name: 'Heading',
+      x: 32,
+      y: 24,
+      characters: snapshot.title || 'Untitled Page'
+    },
+    {
+      type: 'RECTANGLE',
+      name: 'Header',
+      x: 0,
+      y: 220,
+      width: width - 64,
+      height: 50,
+      layoutAlign: 'STRETCH',
+      fills: [{ type: 'SOLID', color: { r: 0.94, g: 0.96, b: 0.99 } }]
+    },
+    {
+      type: 'TEXT',
+      name: 'Label',
+      x: 32,
+      y: 235,
+      characters: 'Header'
+    },
+    {
+      type: 'RECTANGLE',
+      name: 'Nav',
+      x: 0,
+      y: 270,
+      width: width - 64,
+      height: 50,
+      layoutAlign: 'STRETCH',
+      fills: [{ type: 'SOLID', color: { r: 0.93, g: 0.95, b: 0.99 } }]
+    },
+    {
+      type: 'TEXT',
+      name: 'Link',
+      x: 32,
+      y: 285,
+      characters: 'Navigation'
+    }
+  ];
+  sections.forEach((block, index) => {
+    const sectionY = baseY + index * 90;
+    children.push({
+      type: 'FRAME',
+      name: `Section ${String(index + 1).padStart(2, '0')}`,
+      x: 24,
+      y: sectionY,
+      width: width - 64,
+      minHeight: 76,
+      ...SECTION_AUTO_LAYOUT,
+      layoutAlign: 'STRETCH',
+      fills: [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }],
+      children: [
+        {
+          type: 'TEXT',
+          name: block.tag && /^h[1-3]$/.test(block.tag) ? 'Heading' : 'Body',
+          layoutAlign: 'STRETCH',
+          characters: block.text
+        }
+      ]
+    });
+  });
+  const footerY = baseY + sections.length * 90 + 20;
+  children.push({
+    type: 'RECTANGLE',
+    name: 'Footer',
+    x: 0,
+    y: footerY,
+    width: width - 64,
+    height: 60,
+    layoutAlign: 'STRETCH',
+    fills: [{ type: 'SOLID', color: { r: 0.94, g: 0.96, b: 0.99 } }]
+  });
+  children.push({
+    type: 'TEXT',
+    name: 'Label',
+    x: 32,
+    y: footerY + 20,
+    characters: snapshot.page_url || ''
+  });
+  return {
+    frame: {
+      type: 'FRAME',
+      name: pageFrameName(pageIndex, snapshot.title),
+      x: 0,
+      y: 0,
+      width,
+      height: footerY + 100,
+      ...PAGE_AUTO_LAYOUT,
+      children
+    }
+  };
+}
+
+function sanitizeReasonText(value, fallback = 'unknown') {
+  const text = value && value.message ? value.message : value;
+  if (!text) {
+    return fallback;
+  }
+  return String(text).replace(/\s+/g, '_');
+}
+
+function collectSectionFrameNames(figmaPayload = {}) {
+  const frame = figmaPayload && figmaPayload.frame ? figmaPayload.frame : {};
+  const children = Array.isArray(frame.children) ? frame.children : [];
+  return children
+    .filter((node) => node && typeof node.name === 'string' && /^Section \d{2}$/.test(node.name))
+    .map((node) => node.name);
+}
+
+async function applyMinimalAutoLayout({ token, fileKey, frameId, figmaPayload }) {
+  if (!frameId) {
+    return { layoutApplied: false, layoutReason: 'layout_frame_id_missing' };
+  }
+  const sectionNames = collectSectionFrameNames(figmaPayload);
+  try {
+    await callFigmaApi({
+      token,
+      method: 'POST',
+      endpoint: `/files/${fileKey}/nodes`,
+      body: {
+        action: 'apply_auto_layout_minimal',
+        payload: {
+          frame_id: frameId,
+          page: PAGE_AUTO_LAYOUT,
+          sections: sectionNames.map((name) => ({
+            name,
+            ...SECTION_AUTO_LAYOUT
+          }))
+        }
+      }
+    });
+    return { layoutApplied: true, layoutReason: '-' };
+  } catch (error) {
+    return { layoutApplied: false, layoutReason: sanitizeReasonText(error, 'layout_apply_failed') };
+  }
+}
+
+function collectNodeNamesFromPayload(payload = {}) {
+  const names = [];
+  const frame = payload && payload.frame ? payload.frame : null;
+  if (frame && frame.name) {
+    names.push(frame.name);
+  }
+  const children = frame && Array.isArray(frame.children) ? frame.children : [];
+  children.forEach((node) => {
+    if (node && typeof node.name === 'string') {
+      names.push(node.name);
+    }
+  });
+  return names;
+}
+
+function hasTagLikeLayerName(names = []) {
+  return names.some((name) => /\b(h1|h2|h3|p|a)\b/i.test(String(name)));
+}
+
+function sectionNumbersStable(names = []) {
+  const sectionNames = names.filter((name) => /^Section \d{2}$/.test(String(name)));
+  for (let i = 0; i < sectionNames.length; i += 1) {
+    const expected = `Section ${String(i + 1).padStart(2, '0')}`;
+    if (sectionNames[i] !== expected) {
+      return false;
+    }
+  }
+  return sectionNames.length > 0;
+}
+
+function buildNamingChecks(payload = {}) {
+  const names = collectNodeNamesFromPayload(payload);
+  return {
+    naming_version: PHASE1_NAMING_VERSION,
+    tag_derived_name: hasTagLikeLayerName(names),
+    section_sequence_stable: sectionNumbersStable(names)
+  };
+}
+
+function toFigmaNodeUrl(fileKey, nodeId) {
+  if (!nodeId) {
+    return null;
+  }
+  return `https://www.figma.com/file/${fileKey}?node-id=${encodeURIComponent(String(nodeId))}`;
+}
+
+function extractCreatedNodeInfo(data = {}) {
+  const pageId =
+    data.page_id ||
+    data.pageNodeId ||
+    data.page?.id ||
+    data.parent?.id ||
+    null;
+  const frameId =
+    data.frame_id ||
+    data.frameNodeId ||
+    data.node_id ||
+    data.node?.id ||
+    data.createdNode?.id ||
+    (Array.isArray(data.nodes) && data.nodes[0] && data.nodes[0].id) ||
+    null;
+  return { pageId, frameId };
+}
+
+function inferNextAction(reason = '') {
+  const text = String(reason || '').toLowerCase();
+  if (text.includes('token')) return 'FIGMA_TOKEN の有無/LENを確認し、Hub接続設定を見直してください。';
+  if (text.includes('page_fetch_failed') || text.includes('network')) return 'page_url へ到達可能かを確認し、ネットワークを再試行してください。';
+  if (text.includes('figma api 401') || text.includes('figma api 403')) return 'Figma権限/トークンの有効性を確認してください。';
+  return 'inputs.page_url / figma_file_key を確認し、再実行してください。';
+}
+
+function buildCodeToFigmaSummary({
+  status,
+  runId,
+  pageUrl,
+  pages,
+  frames,
+  progress,
+  figmaFileUrl,
+  figmaPageUrl,
+  figmaFrameUrl,
+  mcpAttempt,
+  reason,
+  nextAction
+}) {
+  const lines = [
+    '# Code to Figma Summary',
+    '',
+    `- run_id: ${runId}`,
+    `- status: ${status}`,
+    `- naming_version: ${PHASE1_NAMING_VERSION}`,
+    `- page_url: ${pageUrl || '-'}`,
+    `- figma_file: ${figmaFileUrl || '-'}`,
+    `- figma_page: ${figmaPageUrl || '-'}`,
+    `- figma_frame: ${figmaFrameUrl || '-'}`,
+    `- mcp_attempt: ${mcpAttempt ? `{ status: ${mcpAttempt.status || '-'}, reason: ${mcpAttempt.reason || '-'} }` : '-'}`,
+    ''
+  ];
+  const normalizedPages = Array.isArray(pages) && pages.length > 0 ? pages : pageUrl ? [pageUrl] : [];
+  lines.push('## Pages', `- pages_total: ${normalizedPages.length}`);
+  normalizedPages.forEach((url, index) => {
+    lines.push(`- pages[]: { index: ${index + 1}, url: ${url} }`);
+  });
+  lines.push('');
+  if (Array.isArray(frames) && frames.length > 0) {
+    lines.push('## Frames');
+    frames.forEach((entry) => {
+      if (entry.status === 'success') {
+        lines.push(
+          `- frames[]: { index: ${entry.index}, url: ${entry.url}, status: success, frameUrl: ${entry.frameUrl || '-'}, layoutApplied: ${entry.layoutApplied === true ? 'true' : 'false'}, layoutReason: ${entry.layoutReason || '-'} }`
+        );
+      } else {
+        lines.push(
+          `- frames[]: { index: ${entry.index}, url: ${entry.url}, status: failed, reason: ${entry.reason || '-'}, layoutApplied: ${entry.layoutApplied === true ? 'true' : 'false'}, layoutReason: ${entry.layoutReason || '-'} }`
+        );
+      }
+    });
+    lines.push('');
+  }
+  if (Array.isArray(progress) && progress.length > 0) {
+    lines.push('## Progress');
+    progress.forEach((entry) => {
+      lines.push(
+        `- progress[]: { index: ${entry.index}, url: ${entry.url}, status: ${entry.status}, reason: ${entry.reason || '-'} }`
+      );
+    });
+    lines.push('');
+  }
+  if (status === 'ok') {
+    lines.push('## Result', '- Code→Figma completed for one page.');
+  } else {
+    lines.push('## Failure', `- reason: ${reason || 'unknown'}`, `- nextAction: ${nextAction || inferNextAction(reason)}`);
+  }
+  lines.push('');
+  return lines.join('\n');
+}
+
+async function fetchPageSnapshot(pageUrl) {
+  if (typeof fetch !== 'function') {
+    throw new Error('network_unreachable: global fetch unavailable');
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(pageUrl, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: { 'User-Agent': 'integration-hub-code-to-figma' }
+    });
+    if (!response.ok) {
+      throw new Error(`page_fetch_failed status=${response.status}`);
+    }
+    const html = await response.text();
+    return {
+      html,
+      meta: {
+        status: response.status,
+        contentType: response.headers.get('content-type') || ''
+      }
+    };
+  } catch (error) {
+    if (error && error.name === 'AbortError') {
+      throw new Error('page_fetch_failed timeout');
+    }
+    if (error && error.message) {
+      throw error;
+    }
+    throw new Error('page_fetch_failed unknown');
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function normalizePageUrl(raw) {
+  const parsed = new URL(String(raw || '').trim());
+  parsed.hash = '';
+  return parsed.toString();
+}
+
+function extractSameOriginLinks(startUrl, html, maxPages = 20) {
+  const base = new URL(startUrl);
+  const pages = [startUrl];
+  const seen = new Set(pages);
+  const hrefPattern = /<a[^>]+href=["']([^"']+)["']/gi;
+  let match;
+  while ((match = hrefPattern.exec(String(html || '')))) {
+    if (pages.length >= maxPages) {
+      break;
+    }
+    const href = String(match[1] || '').trim();
+    if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = new URL(href, base);
+    } catch {
+      continue;
+    }
+    if (parsed.origin !== base.origin) {
+      continue;
+    }
+    if (parsed.search) {
+      continue;
+    }
+    parsed.hash = '';
+    const normalized = parsed.toString();
+    if (seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    pages.push(normalized);
+  }
+  return pages.slice(0, maxPages);
+}
+
+async function collectPagesFromOrigin(pageUrl, { maxPages = 20 } = {}) {
+  const normalizedStart = normalizePageUrl(pageUrl);
+  const fetched = await fetchPageSnapshot(normalizedStart);
+  const pages = extractSameOriginLinks(normalizedStart, fetched.html, maxPages);
+  return {
+    pages,
+    html: fetched.html,
+    meta: fetched.meta
+  };
+}
+
+function shouldTryMcpFirst(job = {}) {
+  const mode = job && typeof job.run_mode === 'string' ? job.run_mode.trim().toLowerCase() : 'mcp';
+  return mode === '' || mode === 'mcp';
+}
+
+function resolveMcpProvider(job = {}) {
+  const provider = job && job.inputs && typeof job.inputs.mcp_provider === 'string' ? job.inputs.mcp_provider.trim() : '';
+  return provider;
+}
+
+function safeNormalizePageUrl(raw) {
+  const text = String(raw || '').trim();
+  if (!text) {
+    return '';
+  }
+  try {
+    return normalizePageUrl(text);
+  } catch {
+    return text;
+  }
+}
+
+function collectRequestedPagesForMcp(job = {}) {
+  const inputs = job && job.inputs ? job.inputs : {};
+  const primary = safeNormalizePageUrl(inputs.page_url);
+  const extras = Array.isArray(inputs.pages)
+    ? inputs.pages
+        .map((entry) => safeNormalizePageUrl(entry))
+        .filter(Boolean)
+    : [];
+  const combined = [];
+  const seen = new Set();
+  [primary, ...extras].forEach((entry) => {
+    if (!entry || seen.has(entry)) {
+      return;
+    }
+    seen.add(entry);
+    combined.push(entry);
+  });
+  return combined.slice(0, 20);
+}
+
+function buildCodeToFigmaMcpJob(job = {}, runId = '') {
+  const mcpJob = cloneJob(job);
+  const resolvedMcpTarget = `.ai-runs/${runId}/code_to_figma_mcp_report.json`;
+  const pages = collectRequestedPagesForMcp(job);
+  const provider = resolveMcpProvider(job) || 'local_stub';
+  mcpJob.inputs = {
+    ...(mcpJob.inputs || {}),
+    mcp_provider: provider,
+    pages,
+    naming_version: PHASE1_NAMING_VERSION,
+    layout_minimal: true,
+    target_path: resolvedMcpTarget,
+    target_path_resolved: resolvedMcpTarget
+  };
+  return mcpJob;
+}
+
+function parseMcpFailureReason(result = {}) {
+  if (Array.isArray(result.checks)) {
+    const failed = result.checks.find((entry) => entry && entry.ok === false);
+    if (failed) {
+      return failed.id ? `mcp_${sanitizeReasonText(failed.id, 'failed')}` : 'mcp_exec_failed';
+    }
+  }
+  if (Array.isArray(result.errors) && result.errors[0]) {
+    return 'mcp_exec_failed';
+  }
+  return 'mcp_failed';
+}
+
+function hasCodeToFigmaMcpSuccessSignal(result = {}) {
+  const logs = Array.isArray(result.logs) ? result.logs : [];
+  const checks = Array.isArray(result.checks) ? result.checks : [];
+  const hasSpecificCheck = checks.some((entry) => entry && entry.id === 'code_to_figma' && entry.ok === true);
+  const hasSpecificLog = logs.some((entry) => typeof entry === 'string' && entry.startsWith('code_to_figma_mcp=ok'));
+  return hasSpecificCheck || hasSpecificLog;
+}
+
+function normalizeMcpFrames(frames = [], fallbackPages = []) {
+  return (Array.isArray(frames) ? frames : []).map((entry, index) => {
+    const row = entry && typeof entry === 'object' ? entry : {};
+    const status = row.status === 'failed' ? 'failed' : 'success';
+    const frameUrl = row.frameUrl || row.frame_url || '-';
+    const reason = row.reason || '-';
+    return {
+      index: Number.isFinite(Number(row.index)) ? Number(row.index) : index + 1,
+      url: row.url || fallbackPages[index] || '-',
+      status,
+      frameUrl,
+      reason,
+      layoutApplied: row.layoutApplied === true,
+      layoutReason: row.layoutReason || (row.layoutApplied === true ? '-' : status === 'failed' ? 'mcp_frame_failed' : '-')
+    };
+  });
+}
+
+function normalizeMcpProgress(progress = [], fallbackPages = []) {
+  return (Array.isArray(progress) ? progress : []).map((entry, index) => {
+    const row = entry && typeof entry === 'object' ? entry : {};
+    return {
+      index: Number.isFinite(Number(row.index)) ? Number(row.index) : index + 1,
+      url: row.url || fallbackPages[index] || '-',
+      status: row.status === 'failed' ? 'failed' : 'success',
+      reason: row.reason || '-'
+    };
+  });
+}
+
+function extractMcpCodeToFigmaPayload(result = {}) {
+  const payload = result && typeof result.code_to_figma === 'object' ? result.code_to_figma : {};
+  const pages = Array.isArray(payload.pages) ? payload.pages : Array.isArray(result.pages) ? result.pages : [];
+  const frames = Array.isArray(payload.frames) ? payload.frames : Array.isArray(result.frames) ? result.frames : [];
+  const progress = Array.isArray(payload.progress) ? payload.progress : Array.isArray(result.progress) ? result.progress : [];
+  const figmaLinks = payload.figma_links && typeof payload.figma_links === 'object' ? payload.figma_links : {};
+  return {
+    pages,
+    frames,
+    progress,
+    figmaLinks,
+    reason: payload.reason || '-'
+  };
+}
+
+function progressLog(message) {
+  process.stdout.write(`${message}\n`);
 }
 
 function resolveRepoRoot(repoLocalPath) {
@@ -875,6 +1483,379 @@ async function executeFigmaBootstrapJob(jobPayload) {
   }
 }
 
+async function executeCodeToFigmaFromUrlJob(jobPayload) {
+  const job = cloneJob(jobPayload);
+  const runId = createRunIdOrExit();
+  const runPaths = createRunPathsOrExit(runId);
+  recordRunStart(runPaths, job);
+  const createdAt = new Date().toISOString();
+  const summaryPath = `.ai-runs/${runId}/summary.md`;
+  const domSnapshotPath = `.ai-runs/${runId}/dom_snapshot.json`;
+  const figmaPayloadPath = `.ai-runs/${runId}/figma_nodes_payload.json`;
+  const artifactPath = `.ai-runs/${runId}/code_to_figma_report.json`;
+  let collectedPages = [];
+  const progressRows = [];
+  const frameRows = [];
+  const progressMessages = [];
+  let mcpAttempt = null;
+  const emitProgress = (message) => {
+    progressMessages.push(message);
+    progressLog(message);
+  };
+
+  const writeFailureSummary = (reason) => {
+    const pageUrl = job?.inputs?.page_url || '';
+    const summary = buildCodeToFigmaSummary({
+      status: 'failed',
+      runId,
+      pageUrl,
+      pages: collectedPages.length > 0 ? collectedPages : pageUrl ? [pageUrl] : [],
+      frames: frameRows,
+      progress: progressRows,
+      mcpAttempt,
+      reason,
+      nextAction: inferNextAction(reason)
+    });
+    writeTextArtifact(summaryPath, summary);
+  };
+
+  const validation = validateJob(job);
+  if (!validation.ok) {
+    const reason = validation.errors[0] || 'job validation failed';
+    writeFailureSummary(reason);
+    const result = buildValidationFailure(validation.errors);
+    result.artifacts = [{ path: summaryPath, kind: 'markdown' }];
+    return finalizeRun(runPaths, job, result, createdAt);
+  }
+
+  try {
+    if (shouldTryMcpFirst(job)) {
+      const mcpProvider = resolveMcpProvider(job);
+      if (!mcpProvider) {
+        mcpAttempt = { status: 'skipped', reason: 'mcp_provider_not_configured' };
+        emitProgress('C2F_MCP_FIRST status=skipped reason=mcp_provider_not_configured');
+      } else {
+        emitProgress(`C2F_MCP_FIRST status=started provider=${mcpProvider}`);
+        try {
+          const mcpJob = buildCodeToFigmaMcpJob(job, runId);
+          const mcpResult = await runAdapter(mcpJob, { role: 'operator' });
+          if (mcpResult && mcpResult.status === 'ok' && hasCodeToFigmaMcpSuccessSignal(mcpResult)) {
+            const mcpPayload = extractMcpCodeToFigmaPayload(mcpResult);
+            const mcpPages = Array.isArray(mcpPayload.pages) && mcpPayload.pages.length > 0
+              ? mcpPayload.pages
+              : collectRequestedPagesForMcp(job);
+            const mcpFrames = normalizeMcpFrames(mcpPayload.frames, mcpPages);
+            const mcpProgress = normalizeMcpProgress(mcpPayload.progress, mcpPages);
+            if (mcpFrames.length === 0) {
+              const reason = 'mcp_frames_missing';
+              mcpAttempt = { status: 'failed', reason };
+              emitProgress(`C2F_MCP_FIRST status=failed reason=${reason}`);
+            } else {
+              mcpAttempt = { status: 'ok', reason: '-' };
+              emitProgress('C2F_MCP_FIRST status=ok reason=-');
+              const targetPath = resolveTargetPath(job.inputs.target_path, runId);
+              ensureAllowedPath(targetPath, job.constraints.allowed_paths);
+              const pageUrl = safeNormalizePageUrl((job.inputs && job.inputs.page_url) || '');
+              const resolvedPages = mcpPages.length > 0 ? mcpPages : pageUrl ? [pageUrl] : [];
+              resolvedPages.forEach((entry) => {
+                if (!collectedPages.includes(entry)) {
+                  collectedPages.push(entry);
+                }
+              });
+              mcpFrames.forEach((entry) => frameRows.push(entry));
+              mcpProgress.forEach((entry) => progressRows.push(entry));
+              const summary = buildCodeToFigmaSummary({
+                status: 'ok',
+                runId,
+                pageUrl: resolvedPages[0] || pageUrl,
+                pages: resolvedPages,
+                frames: frameRows,
+                progress: progressRows,
+                mcpAttempt,
+                figmaFileUrl: mcpPayload.figmaLinks.file || '-',
+                figmaPageUrl: mcpPayload.figmaLinks.page || '-',
+                figmaFrameUrl: mcpPayload.figmaLinks.frame || '-'
+              });
+              writeTextArtifact(summaryPath, summary);
+              writeJsonArtifact(targetPath, {
+                run_id: runId,
+                page_url: resolvedPages[0] || pageUrl || '',
+                pages_total: resolvedPages.length,
+                pages: resolvedPages.map((url, index) => ({ index: index + 1, url })),
+                frames: frameRows,
+                progress: progressRows,
+                naming: { naming_version: PHASE1_NAMING_VERSION },
+                mcp_attempt: mcpAttempt
+              });
+              const result = {
+                status: 'ok',
+                artifacts: [
+                  { path: targetPath, kind: 'json' },
+                  { path: summaryPath, kind: 'markdown' }
+                ],
+                diff_summary: 'Code→Figma completed via MCP',
+                checks: [{ id: 'code_to_figma_mcp', ok: true, reason: 'mcp_first_success' }],
+                logs: [...progressMessages, 'code_to_figma_mcp=ok']
+              };
+              return finalizeRun(runPaths, job, result, createdAt);
+            }
+          }
+          const reason = parseMcpFailureReason(mcpResult);
+          mcpAttempt = { status: 'failed', reason };
+          emitProgress(`C2F_MCP_FIRST status=failed reason=${reason}`);
+        } catch (mcpError) {
+          const reason = sanitizeReasonText(mcpError, 'mcp_failed');
+          mcpAttempt = { status: 'failed', reason };
+          emitProgress(`C2F_MCP_FIRST status=failed reason=${reason}`);
+        }
+      }
+    } else {
+      mcpAttempt = { status: 'skipped', reason: 'run_mode_not_mcp' };
+    }
+
+    const targetPath = resolveTargetPath(job.inputs.target_path, runId);
+    ensureAllowedPath(targetPath, job.constraints.allowed_paths);
+
+    const pageUrl = typeof job.inputs.page_url === 'string' ? job.inputs.page_url.trim() : '';
+    if (!pageUrl) {
+      throw new Error('page_url is required');
+    }
+    collectedPages = [normalizePageUrl(pageUrl)];
+    const inputPages = Array.isArray(job.inputs.pages)
+      ? job.inputs.pages
+          .filter((entry) => typeof entry === 'string' && entry.trim())
+          .map((entry) => normalizePageUrl(entry.trim()))
+      : [];
+    let firstHtml = '';
+    let firstMeta = {};
+    if (inputPages.length > 0) {
+      const unique = [];
+      const seen = new Set();
+      [normalizePageUrl(pageUrl), ...inputPages].forEach((entry) => {
+        if (!seen.has(entry)) {
+          seen.add(entry);
+          unique.push(entry);
+        }
+      });
+      collectedPages = unique.slice(0, 20);
+    } else {
+      const collected = await collectPagesFromOrigin(pageUrl, { maxPages: 20 });
+      collectedPages = collected.pages.length > 0 ? collected.pages : [normalizePageUrl(pageUrl)];
+      firstHtml = collected.html;
+      firstMeta = collected.meta;
+    }
+    emitProgress(`PAGE_DISCOVERED total=${collectedPages.length}`);
+
+    const figmaInput = job.inputs.figma_design_url || job.inputs.figma_file_key;
+    const fileKey = extractFigmaFileKey(figmaInput);
+    const figmaToken = (job.inputs.figma_token || process.env.FIGMA_TOKEN || '').trim();
+    const tokenPresent = figmaToken.length > 0;
+    const tokenLen = figmaToken.length;
+    if (!tokenPresent) {
+      throw new Error('FIGMA_TOKEN missing (presence=false len=0)');
+    }
+
+    let firstSuccess = null;
+    let firstSnapshot = null;
+    let firstPayload = null;
+    for (let i = 0; i < collectedPages.length; i += 1) {
+      const url = collectedPages[i];
+      const seq = `${i + 1}/${collectedPages.length}`;
+      emitProgress(`PAGE_PROCESS_START ${seq} url=${url}`);
+      try {
+        if (url.includes('__force_fail__')) {
+          throw new Error('forced_page_failure');
+        }
+        let html;
+        let meta;
+        if (i === 0 && firstHtml) {
+          html = firstHtml;
+          meta = firstMeta;
+        } else {
+          const fetched = await fetchPageSnapshot(url);
+          html = fetched.html;
+          meta = fetched.meta;
+        }
+        const snapshot = buildDomSnapshot(url, html, meta);
+        const figmaPayload = buildFigmaFramePayload(snapshot, { pageIndex: i + 1 });
+        figmaPayload.pages = collectedPages.map((entry, index) => ({ index: index + 1, url: entry }));
+        const writeResponse = await callFigmaApi({
+          token: figmaToken,
+          method: 'POST',
+          endpoint: `/files/${fileKey}/nodes`,
+          body: {
+            action: 'create_frame_from_snapshot',
+            payload: figmaPayload
+          }
+        });
+        const created = extractCreatedNodeInfo(writeResponse.data || {});
+        if (!created.frameId && process.env.FIGMA_API_MOCK === '1') {
+          created.pageId = created.pageId || '0:1';
+          created.frameId = `1:${i + 1}`;
+        }
+        if (!created.frameId) {
+          throw new Error('figma write response missing frame id');
+        }
+        if (!firstSuccess) {
+          firstSuccess = created;
+          firstSnapshot = snapshot;
+          firstPayload = figmaPayload;
+        }
+        const frameUrl = toFigmaNodeUrl(fileKey, created.frameId);
+        const layoutResult = await applyMinimalAutoLayout({
+          token: figmaToken,
+          fileKey,
+          frameId: created.frameId,
+          figmaPayload
+        });
+        frameRows.push({
+          index: i + 1,
+          url,
+          status: 'success',
+          frameUrl,
+          layoutApplied: layoutResult.layoutApplied,
+          layoutReason: layoutResult.layoutReason
+        });
+        progressRows.push({
+          index: i + 1,
+          url,
+          status: 'success',
+          reason: '-'
+        });
+        emitProgress(`PAGE_PROCESS_DONE ${seq} status=success reason=-`);
+      } catch (pageError) {
+        const reasonText = sanitizeReasonText(pageError, 'unknown');
+        progressRows.push({
+          index: i + 1,
+          url,
+          status: 'failed',
+          reason: reasonText
+        });
+        frameRows.push({
+          index: i + 1,
+          url,
+          status: 'failed',
+          reason: reasonText,
+          layoutApplied: false,
+          layoutReason: 'page_create_failed'
+        });
+        emitProgress(`PAGE_PROCESS_DONE ${seq} status=failed reason=${reasonText}`);
+      }
+    }
+    if (!firstSuccess || !firstSnapshot || !firstPayload) {
+      throw new Error('all pages failed');
+    }
+    const namingSummary = buildNamingChecks(firstPayload);
+    writeJsonArtifact(domSnapshotPath, firstSnapshot);
+    writeJsonArtifact(figmaPayloadPath, firstPayload);
+
+    const figmaFileUrl = `https://www.figma.com/file/${fileKey}`;
+    const figmaPageUrl = toFigmaNodeUrl(fileKey, firstSuccess.pageId);
+    const figmaFrameUrl = toFigmaNodeUrl(fileKey, firstSuccess.frameId);
+    const summary = buildCodeToFigmaSummary({
+      status: 'ok',
+      runId,
+      pageUrl: collectedPages[0],
+      pages: collectedPages,
+      frames: frameRows,
+      progress: progressRows,
+      mcpAttempt,
+      figmaFileUrl,
+      figmaPageUrl,
+      figmaFrameUrl
+    });
+    writeTextArtifact(summaryPath, summary);
+
+    writeJsonArtifact(targetPath, {
+      run_id: runId,
+      page_url: collectedPages[0],
+      pages_total: collectedPages.length,
+      pages: collectedPages.map((url, index) => ({ index: index + 1, url })),
+      frames: frameRows,
+      progress: progressRows,
+      figma_file_key: fileKey,
+      figma_links: {
+        file: figmaFileUrl,
+        page: figmaPageUrl,
+        frame: figmaFrameUrl
+      },
+      figma_token: { present: tokenPresent, len: tokenLen },
+      snapshot: {
+        title: firstSnapshot.title,
+        text_blocks: firstSnapshot.text_blocks.length
+      },
+      naming: namingSummary,
+      created_at: new Date().toISOString()
+    });
+
+    if (targetPath !== artifactPath) {
+      writeJsonArtifact(artifactPath, {
+        run_id: runId,
+        page_url: collectedPages[0],
+        pages_total: collectedPages.length,
+        pages: collectedPages.map((url, index) => ({ index: index + 1, url })),
+        frames: frameRows,
+        progress: progressRows,
+        figma_links: {
+          file: figmaFileUrl,
+          page: figmaPageUrl,
+          frame: figmaFrameUrl
+        },
+        naming: namingSummary,
+        figma_token: { present: tokenPresent, len: tokenLen }
+      });
+    }
+
+    const result = {
+      status: 'ok',
+      artifacts: [
+        { path: targetPath, kind: 'json' },
+        { path: domSnapshotPath, kind: 'json' },
+        { path: figmaPayloadPath, kind: 'json' },
+        { path: summaryPath, kind: 'markdown' }
+      ],
+      diff_summary: 'Code→Figma completed for single page URL',
+      checks: [
+        { id: 'page_fetch', ok: true, reason: `url=${collectedPages[0]}` },
+        { id: 'page_collect', ok: collectedPages.length >= 1, reason: `pages_total=${collectedPages.length}` },
+        {
+          id: 'page_process',
+          ok: progressRows.some((row) => row.status === 'success'),
+          reason: `success=${progressRows.filter((row) => row.status === 'success').length}/${progressRows.length}`
+        },
+        { id: 'naming_tag_guard', ok: !namingSummary.tag_derived_name, reason: `tag_derived_name=${namingSummary.tag_derived_name}` },
+        {
+          id: 'naming_section_order',
+          ok: namingSummary.section_sequence_stable,
+          reason: `section_sequence_stable=${namingSummary.section_sequence_stable}`
+        },
+        { id: 'figma_write', ok: true, reason: `file_key=${fileKey}` }
+      ],
+      logs: [
+        ...progressMessages,
+        `page_url=${collectedPages[0]}`,
+        `pages_total=${collectedPages.length}`,
+        `naming_version=${namingSummary.naming_version}`,
+        `figma_file_key=${fileKey}`,
+        `figma_token_present=${tokenPresent}`,
+        `figma_token_len=${tokenLen}`
+      ]
+    };
+    return finalizeRun(runPaths, job, result, createdAt);
+  } catch (error) {
+    const reason = error && error.message ? error.message : 'code_to_figma_failed';
+    writeFailureSummary(reason);
+    const result = {
+      status: 'error',
+      errors: [reason],
+      artifacts: [{ path: summaryPath, kind: 'markdown' }],
+      checks: [{ id: 'code_to_figma', ok: false, reason }],
+      logs: [...progressMessages, 'code_to_figma failed']
+    };
+    return finalizeRun(runPaths, job, result, createdAt);
+  }
+}
+
 function checkCommandAvailability(command) {
   try {
     const result = execSync(`command -v ${command}`, {
@@ -1271,6 +2252,8 @@ async function main() {
     result = await executeRepoPatchJob(jobPayload);
   } else if (jobType === 'integration_hub.phase2.diagnostics') {
     result = await executeDiagnosticsJob(jobPayload);
+  } else if (jobType === 'integration_hub.phase1.code_to_figma_from_url') {
+    result = await executeCodeToFigmaFromUrlJob(jobPayload);
   } else if (jobType === 'integration_hub.phase2.figma_bootstrap_from_repo') {
     result = await executeFigmaBootstrapJob(jobPayload);
   } else {
@@ -1285,3 +2268,9 @@ if (require.main === module) {
     process.exit(1);
   });
 }
+
+module.exports = {
+  extractSameOriginLinks,
+  buildCodeToFigmaSummary,
+  normalizePageUrl
+};

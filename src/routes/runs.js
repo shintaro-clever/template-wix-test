@@ -10,6 +10,7 @@ const { validatePreflightLocal, deepVerify } = require("../runner/preflight");
 const { recordRunEvent } = require("../db/runEvents");
 const { withRetry } = require("../db/retry");
 const { recordAudit, AUDIT_ACTIONS } = require("../middleware/audit");
+const { emitAuditEvent } = require("../audit/events");
 const { sendJson, jsonError, readJsonBody } = require("../api/projects");
 
 const runJobScript = path.join(__dirname, "..", "..", "scripts", "run-job.js");
@@ -169,6 +170,7 @@ function recordPreflightFailure(runId) {
 
 function buildProjectJob(projectId, inputs) {
   const payload = typeof inputs === "object" && inputs !== null ? inputs : {};
+  const hasPageUrl = typeof payload.page_url === "string" && payload.page_url.trim().length > 0;
   const rawTarget = typeof payload.target_path === "string" ? payload.target_path.trim() : "";
   const targetPath =
     rawTarget && rawTarget.startsWith(".ai-runs/")
@@ -185,6 +187,55 @@ function buildProjectJob(projectId, inputs) {
   };
   if (payload.connection_id) {
     jobInputs.connection_id = payload.connection_id;
+  }
+  if (hasPageUrl) {
+    jobInputs.page_url = payload.page_url.trim();
+    if (Array.isArray(payload.pages)) {
+      jobInputs.pages = payload.pages
+        .filter((entry) => typeof entry === "string" && entry.trim())
+        .map((entry) => entry.trim());
+    }
+    if (typeof payload.figma_design_url === "string" && payload.figma_design_url.trim()) {
+      jobInputs.figma_design_url = payload.figma_design_url.trim();
+    }
+    if (typeof payload.figma_file_key === "string" && payload.figma_file_key.trim()) {
+      jobInputs.figma_file_key = payload.figma_file_key.trim();
+    }
+    return {
+      job_type: "integration_hub.phase1.code_to_figma_from_url",
+      goal: "Code to Figma (single page from URL)",
+      inputs: {
+        ...jobInputs,
+        target_path:
+          rawTarget && rawTarget.startsWith(".ai-runs/")
+            ? rawTarget
+            : ".ai-runs/{{run_id}}/code_to_figma_report.json",
+      },
+      constraints: {
+        allowed_paths: [".ai-runs/"],
+        max_files_changed: 1,
+        no_destructive_ops: true,
+      },
+      acceptance_criteria: [
+        "run.json and summary.md are written under .ai-runs/<run_id>/",
+      ],
+      provenance: {
+        issue: "",
+        operator: "operator",
+      },
+      run_mode: "mcp",
+      output_language: "ja",
+      expected_artifacts: [
+        {
+          name: "code_to_figma_report.json",
+          description: "code to figma report",
+        },
+        {
+          name: "summary.md",
+          description: "code to figma summary",
+        },
+      ],
+    };
   }
   return {
     job_type: "integration_hub.phase2.project_run",
@@ -212,7 +263,11 @@ function buildProjectJob(projectId, inputs) {
 }
 
 function runJobAsync(jobPayload, { onStart, onDone } = {}) {
-  const { jobPath, cleanup } = writeTempJobFile(jobPayload);
+  const normalizedJob =
+    jobPayload && typeof jobPayload === "object"
+      ? { ...jobPayload, run_mode: jobPayload.run_mode || "mcp" }
+      : { run_mode: "mcp" };
+  const { jobPath, cleanup } = writeTempJobFile(normalizedJob);
   const child = spawn(process.execPath, [runJobScript, "--job", jobPath, "--role", "operator"], {
     cwd: process.cwd(),
     env: process.env,
@@ -320,10 +375,37 @@ async function handleProjectRunsPost(req, res, db, projectId) {
   const inputsJson = baseValidation.normalized;
   const runId = createRun(db, projectId, inputsJson);
   const jobPayload = buildProjectJob(projectId, inputsJson);
+  try {
+    emitAuditEvent({
+      req,
+      type: "RUN_CREATED",
+      runId,
+      actor: { userId: req.user?.id || "unknown", role: req.user?.role || "unknown" },
+      meta: { status: "queued", project_id: projectId, source: "api/projects/:id/runs" },
+    });
+  } catch (error) {
+    console.warn("audit RUN_CREATED failed:", error.message);
+  }
 
   runJobAsync(jobPayload, {
     onStart: () => {
       updateRunStatus(db, runId, "running");
+      try {
+        emitAuditEvent({
+          req,
+          type: "RUN_STATUS_CHANGED",
+          runId,
+          actor: { userId: req.user?.id || "unknown", role: req.user?.role || "unknown" },
+          meta: {
+            from_status: "queued",
+            to_status: "running",
+            project_id: projectId,
+            source: "api/projects/:id/runs",
+          },
+        });
+      } catch (error) {
+        console.warn("audit RUN_STATUS_CHANGED failed:", error.message);
+      }
       recordAudit({
         db,
         action: AUDIT_ACTIONS.RUN_START,
@@ -335,6 +417,22 @@ async function handleProjectRunsPost(req, res, db, projectId) {
     onDone: (code) => {
       const status = code === 0 ? "completed" : "failed";
       updateRunStatus(db, runId, status);
+      try {
+        emitAuditEvent({
+          req,
+          type: "RUN_STATUS_CHANGED",
+          runId,
+          actor: { userId: req.user?.id || "unknown", role: req.user?.role || "unknown" },
+          meta: {
+            from_status: "running",
+            to_status: status,
+            project_id: projectId,
+            source: "api/projects/:id/runs",
+          },
+        });
+      } catch (error) {
+        console.warn("audit RUN_STATUS_CHANGED failed:", error.message);
+      }
       recordRunEvent({ runId, eventType: status === "completed" ? "run_completed" : "run_failed" });
       recordAudit({
         db,

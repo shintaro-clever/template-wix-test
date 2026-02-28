@@ -10,6 +10,7 @@ const { callFigmaApi, normalizeDepth, sanitizeQuery } = require('../src/figma/ap
 const { buildCodexPrompt } = require('../src/codex/prompt');
 const { resolveHostPort } = require('../src/server/config');
 const { createApp } = require('../src/server/app');
+const { extractSameOriginLinks, normalizePageUrl } = require('./run-job');
 const { runJobClient } = require('../src/runner/runJobClient');
 const {
   createRunRecord,
@@ -228,7 +229,13 @@ function runJobWithRunId(jobPath, extraEnv = {}) {
   const stdout = result.stdout.trim();
   let payload = null;
   if (stdout) {
-    payload = JSON.parse(stdout);
+    try {
+      payload = JSON.parse(stdout);
+    } catch {
+      const lines = stdout.split(/\r?\n/).filter(Boolean);
+      const lastLine = lines.length ? lines[lines.length - 1] : '';
+      payload = lastLine ? JSON.parse(lastLine) : null;
+    }
   }
   let runId = payload && payload.run_id ? String(payload.run_id) : '';
   const after = listRuns();
@@ -253,7 +260,7 @@ function runJobWithRunId(jobPath, extraEnv = {}) {
     const diskPayload = JSON.parse(fs.readFileSync(runJsonPath, 'utf8'));
     payload = diskPayload.runnerResult || diskPayload;
   }
-  return { result: payload, runId };
+  return { result: payload, runId, stdout };
 }
 
 function validateSamples() {
@@ -393,6 +400,317 @@ function verifyRepoPatch() {
   const updated = fs.readFileSync(targetPath, 'utf8');
   assert(updated.includes('repo_patch'), 'repo patch note missing');
   fs.writeFileSync(targetPath, original, 'utf8');
+}
+
+function verifyCodeToFigmaSummaryGuarantee() {
+  const tmpJobPath = path.join(os.tmpdir(), `sample-job.code_to_figma.${Date.now()}.json`);
+  const payload = {
+    job_type: 'integration_hub.phase1.code_to_figma_from_url',
+    goal: 'code to figma selftest',
+    inputs: {
+      message: 'code to figma selftest',
+      target_path: '.ai-runs/{{run_id}}/code_to_figma_report.json',
+      page_url: 'https://example.com',
+      figma_file_key: 'CutkQD2XudkCe8eJ1jDfkZ'
+    },
+    constraints: {
+      allowed_paths: ['.ai-runs/'],
+      max_files_changed: 1,
+      no_destructive_ops: true
+    },
+    acceptance_criteria: ['summary.md is always written'],
+    provenance: {
+      issue: '',
+      operator: 'operator'
+    },
+    run_mode: 'mcp',
+    output_language: 'ja',
+    expected_artifacts: [
+      { name: 'code_to_figma_report.json', description: 'report' },
+      { name: 'summary.md', description: 'summary' }
+    ]
+  };
+  fs.writeFileSync(tmpJobPath, JSON.stringify(payload, null, 2), 'utf8');
+  try {
+    const { result, runId } = runJobWithRunId(tmpJobPath, { FIGMA_TOKEN: '' });
+    assert(result.status === 'error', 'code_to_figma should fail when FIGMA_TOKEN is missing');
+    const summaryPath = path.join(RUNS_ROOT, runId, 'summary.md');
+    assert(fs.existsSync(summaryPath), 'summary.md must exist even when code_to_figma fails');
+    const summary = fs.readFileSync(summaryPath, 'utf8');
+    assert(summary.includes('reason:'), 'summary must include failure reason');
+    assert(summary.includes('nextAction:'), 'summary must include nextAction');
+  } finally {
+    try {
+      fs.unlinkSync(tmpJobPath);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function verifyCodeToFigmaPageCollection() {
+  const startUrl = normalizePageUrl('https://example.com/start');
+  const html = [
+    '<html><head><title>Start</title></head><body>',
+    '<a href="/page-a">A</a>',
+    '<a href="/page-b?x=1">B-query</a>',
+    '<a href="/page-c#section">C-hash</a>',
+    '<a href="https://example.com/page-a">A-dup</a>',
+    '<a href="https://other.example.com/out">OUT</a>',
+    '</body></html>'
+  ].join('');
+  const pages = extractSameOriginLinks(startUrl, html, 20);
+  assert(Array.isArray(pages), 'extractSameOriginLinks should return array');
+  assert(pages.length >= 1, 'pages_total should be >= 1');
+  assert(pages[0] === startUrl, 'pages should include start URL first');
+  assert(!pages.some((url) => String(url).includes('?')), 'pages should exclude query URLs');
+  assert(pages.includes('https://example.com/page-a'), 'same-origin link should be included');
+  assert(pages.includes('https://example.com/page-c'), 'hash should be removed from collected URLs');
+}
+
+function verifyCodeToFigmaProgressLogs() {
+  const tmpJobPath = path.join(os.tmpdir(), `sample-job.code_to_figma.progress.${Date.now()}.json`);
+  const payload = {
+    job_type: 'integration_hub.phase1.code_to_figma_from_url',
+    goal: 'code to figma progress selftest',
+    inputs: {
+      message: 'code to figma progress',
+      target_path: '.ai-runs/{{run_id}}/code_to_figma_report.json',
+      page_url:
+        'data:text/html,<html><title>Landing</title><body><h1>Hero</h1><p>Alpha</p><p>Beta</p></body></html>',
+      pages: [
+        'data:text/html,<html><title>Landing</title><body><h1>Hero</h1><p>Alpha</p><p>Beta</p></body></html>',
+        'data:text/html,__force_fail__',
+        'data:text/html,<html><title>p3</title><body><p>three</p></body></html>'
+      ],
+      figma_file_key: 'CutkQD2XudkCe8eJ1jDfkZ'
+    },
+    constraints: {
+      allowed_paths: ['.ai-runs/'],
+      max_files_changed: 1,
+      no_destructive_ops: true
+    },
+    acceptance_criteria: ['progress logs must be ordered'],
+    provenance: {
+      issue: '',
+      operator: 'operator'
+    },
+    run_mode: 'mcp',
+    output_language: 'ja',
+    expected_artifacts: [
+      { name: 'code_to_figma_report.json', description: 'report' },
+      { name: 'summary.md', description: 'summary' }
+    ]
+  };
+  fs.writeFileSync(tmpJobPath, JSON.stringify(payload, null, 2), 'utf8');
+  try {
+    const { result, runId, stdout } = runJobWithRunId(tmpJobPath, {
+      FIGMA_TOKEN: 'dummy_token_for_mock',
+      FIGMA_API_MOCK: '1'
+    });
+    assert(result.status === 'ok', 'code_to_figma should continue and finish when one page fails');
+    const logLines = Array.isArray(result.logs) ? result.logs : [];
+    const streamLines = stdout.split(/\r?\n/).filter(Boolean);
+    const combined = logLines.length > 0 ? logLines : streamLines;
+    const discoveredLine = combined.find((line) => line.startsWith('PAGE_DISCOVERED total='));
+    const discoveredMatch = discoveredLine ? discoveredLine.match(/total=(\d+)/) : null;
+    assert(discoveredMatch, 'PAGE_DISCOVERED should be logged');
+    const total = Number(discoveredMatch[1]);
+    assert(total >= 3, 'PAGE_DISCOVERED total should be >= 3');
+    const lines = combined;
+
+    let cursor = 0;
+    for (let i = 1; i <= total; i += 1) {
+      const startPrefix = `PAGE_PROCESS_START ${i}/${total}`;
+      const donePrefix = `PAGE_PROCESS_DONE ${i}/${total} status=`;
+      const startAt = lines.findIndex((line, idx) => idx >= cursor && line.startsWith(startPrefix));
+      assert(startAt >= 0, `missing progress log prefix: ${startPrefix}`);
+      const doneAt = lines.findIndex((line, idx) => idx > startAt && line.startsWith(donePrefix));
+      assert(doneAt >= 0, `missing progress log prefix: ${donePrefix}`);
+      cursor = doneAt + 1;
+    }
+    const failedAt = lines.findIndex((line) => line.includes('PAGE_PROCESS_DONE') && line.includes('status=failed'));
+    assert(failedAt >= 0, 'progress logs should include at least one failed page');
+    const continuedAfterFailure = lines.findIndex(
+      (line, idx) => idx > failedAt && line.startsWith('PAGE_PROCESS_START ')
+    );
+    assert(continuedAfterFailure >= 0, 'processing should continue after one failed page');
+
+    const summaryPath = path.join(RUNS_ROOT, runId, 'summary.md');
+    assert(fs.existsSync(summaryPath), 'summary.md must exist for progress run');
+    const summary = fs.readFileSync(summaryPath, 'utf8');
+    assert(summary.includes('naming_version: p1-04.v1'), 'summary should include naming_version');
+    const successFrames = summary
+      .split(/\r?\n/)
+      .filter((line) => line.includes('- frames[]:') && line.includes('status: success')).length;
+    const successLogs = lines.filter((line) => line.startsWith('PAGE_PROCESS_DONE') && line.includes('status=success')).length;
+    assert(successFrames === successLogs, 'frames[] success entries should match successful page count');
+    const summaryLines = summary.split(/\r?\n/).filter((line) => line.includes('- frames[]:'));
+    assert(summaryLines.some((line) => line.includes('layoutApplied: true')), 'summary should record layoutApplied=true');
+    assert(summaryLines.some((line) => line.includes('layoutApplied: false')), 'summary should record layoutApplied=false');
+    assert(summaryLines.every((line) => line.includes('layoutReason:')), 'summary frames[] should include layoutReason');
+
+    const payloadPath = path.join(RUNS_ROOT, runId, 'figma_nodes_payload.json');
+    assert(fs.existsSync(payloadPath), 'figma_nodes_payload.json must exist');
+    const payloadJson = JSON.parse(fs.readFileSync(payloadPath, 'utf8'));
+    const frame = payloadJson && payloadJson.frame ? payloadJson.frame : {};
+    assert(frame.layoutMode === 'VERTICAL', 'page frame should use vertical auto layout');
+    const names = [frame.name]
+      .concat(Array.isArray(frame.children) ? frame.children.map((node) => node && node.name).filter(Boolean) : [])
+      .filter(Boolean);
+    assert(!names.some((name) => /\b(h1|h2|h3|p|a)\b/i.test(String(name))), 'layer names must not be tag-derived');
+    const sectionNames = names.filter((name) => /^Section \d{2}$/.test(String(name)));
+    assert(sectionNames.length >= 2, 'section names should exist and be multiple');
+    const sections = (Array.isArray(frame.children) ? frame.children : []).filter(
+      (node) => node && /^Section \d{2}$/.test(String(node.name))
+    );
+    assert(sections.length >= 2, 'section nodes should exist');
+    sections.forEach((section) => {
+      assert(section.layoutMode === 'VERTICAL', 'section should use vertical auto layout');
+      assert(section.layoutAlign === 'STRETCH', 'section should use fill container');
+    });
+    sectionNames.forEach((name, idx) => {
+      const expected = `Section ${String(idx + 1).padStart(2, '0')}`;
+      assert(name === expected, `section numbering should be stable (${expected})`);
+    });
+  } finally {
+    try {
+      fs.unlinkSync(tmpJobPath);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function verifyCodeToFigmaMcpLocalStubFrames() {
+  const tmpJobPath = path.join(os.tmpdir(), `sample-job.code_to_figma.mcp_local_stub.${Date.now()}.json`);
+  const payload = {
+    job_type: 'integration_hub.phase1.code_to_figma_from_url',
+    goal: 'code to figma mcp local_stub selftest',
+    inputs: {
+      message: 'code to figma mcp local_stub',
+      target_path: '.ai-runs/{{run_id}}/code_to_figma_report.json',
+      page_url: 'https://example.com/start',
+      pages: ['https://example.com/start', 'https://example.com/about'],
+      figma_file_key: 'CutkQD2XudkCe8eJ1jDfkZ',
+      mcp_provider: 'local_stub'
+    },
+    constraints: {
+      allowed_paths: ['.ai-runs/'],
+      max_files_changed: 1,
+      no_destructive_ops: true
+    },
+    acceptance_criteria: ['local_stub mcp returns frames/progress'],
+    provenance: {
+      issue: '',
+      operator: 'operator'
+    },
+    run_mode: 'mcp',
+    output_language: 'ja',
+    expected_artifacts: [
+      { name: 'code_to_figma_report.json', description: 'report' },
+      { name: 'summary.md', description: 'summary' }
+    ]
+  };
+  fs.writeFileSync(tmpJobPath, JSON.stringify(payload, null, 2), 'utf8');
+  try {
+    const { result, runId } = runJobWithRunId(tmpJobPath, {});
+    assert(result.status === 'ok', 'code_to_figma should succeed via mcp local_stub');
+    const summaryPath = path.join(RUNS_ROOT, runId, 'summary.md');
+    assert(fs.existsSync(summaryPath), 'summary.md must exist for mcp local_stub run');
+    const summary = fs.readFileSync(summaryPath, 'utf8');
+    assert(summary.includes('mcp_attempt: { status: ok, reason: - }'), 'summary should record successful mcp attempt');
+    const frameLines = summary
+      .split(/\r?\n/)
+      .filter((line) => line.includes('- frames[]:') && line.includes('status: success'));
+    assert(frameLines.length >= 2, 'summary should include success frames from mcp local_stub');
+  } finally {
+    try {
+      fs.unlinkSync(tmpJobPath);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+function verifyCodeToFigmaMcpProviderSchemaInvariant() {
+  function runProviderCase(provider) {
+    const tmpJobPath = path.join(os.tmpdir(), `sample-job.code_to_figma.mcp_provider.${provider}.${Date.now()}.json`);
+    const payload = {
+      job_type: 'integration_hub.phase1.code_to_figma_from_url',
+      goal: `code to figma mcp provider ${provider} selftest`,
+      inputs: {
+        message: `code to figma mcp provider ${provider}`,
+        target_path: '.ai-runs/{{run_id}}/code_to_figma_report.json',
+        page_url: 'https://example.com/start',
+        pages: ['https://example.com/start', 'https://example.com/about'],
+        figma_file_key: 'CutkQD2XudkCe8eJ1jDfkZ',
+        mcp_provider: provider
+      },
+      constraints: {
+        allowed_paths: ['.ai-runs/'],
+        max_files_changed: 1,
+        no_destructive_ops: true
+      },
+      acceptance_criteria: ['provider switch keeps summary schema'],
+      provenance: {
+        issue: '',
+        operator: 'operator'
+      },
+      run_mode: 'mcp',
+      output_language: 'ja',
+      expected_artifacts: [
+        { name: 'code_to_figma_report.json', description: 'report' },
+        { name: 'summary.md', description: 'summary' }
+      ]
+    };
+    fs.writeFileSync(tmpJobPath, JSON.stringify(payload, null, 2), 'utf8');
+    try {
+      const { result, runId } = runJobWithRunId(tmpJobPath, {});
+      assert(result.status === 'ok', `${provider} run should succeed`);
+      const summaryPath = path.join(RUNS_ROOT, runId, 'summary.md');
+      assert(fs.existsSync(summaryPath), `${provider} summary.md must exist`);
+      const summary = fs.readFileSync(summaryPath, 'utf8');
+      const frameLine = summary
+        .split(/\r?\n/)
+        .find((line) => line.includes('- frames[]:') && line.includes('status: success'));
+      assert(frameLine, `${provider} summary should include success frame line`);
+      assert(frameLine.includes('index:'), `${provider} frame schema should include index`);
+      assert(frameLine.includes('url:'), `${provider} frame schema should include url`);
+      assert(frameLine.includes('status:'), `${provider} frame schema should include status`);
+      assert(frameLine.includes('frameUrl:'), `${provider} frame schema should include frameUrl`);
+      assert(frameLine.includes('layoutApplied:'), `${provider} frame schema should include layoutApplied`);
+      assert(frameLine.includes('layoutReason:'), `${provider} frame schema should include layoutReason`);
+      const progressLine = summary
+        .split(/\r?\n/)
+        .find((line) => line.includes('- progress[]:'));
+      assert(progressLine, `${provider} summary should include progress line`);
+      assert(progressLine.includes('index:'), `${provider} progress schema should include index`);
+      assert(progressLine.includes('url:'), `${provider} progress schema should include url`);
+      assert(progressLine.includes('status:'), `${provider} progress schema should include status`);
+      assert(progressLine.includes('reason:'), `${provider} progress schema should include reason`);
+      return { frameLine, progressLine };
+    } finally {
+      try {
+        fs.unlinkSync(tmpJobPath);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  const local = runProviderCase('local_stub');
+  const codex = runProviderCase('codex-cli');
+  const normalize = (line) =>
+    String(line)
+      .replace(/\{.*\}/, '{...}')
+      .replace(/\s+/g, ' ')
+      .trim();
+  assert(normalize(local.frameLine) === normalize(codex.frameLine), 'provider switch should keep frames[] summary schema');
+  assert(
+    normalize(local.progressLine) === normalize(codex.progressLine),
+    'provider switch should keep progress[] summary schema'
+  );
 }
 
 async function verifyFigmaDepthNormalization() {
@@ -830,6 +1148,11 @@ async function main() {
   verifyOfflineSmoke();
   verifyDocsUpdate();
   verifyRepoPatch();
+  verifyCodeToFigmaSummaryGuarantee();
+  verifyCodeToFigmaPageCollection();
+  verifyCodeToFigmaProgressLogs();
+  verifyCodeToFigmaMcpLocalStubFrames();
+  verifyCodeToFigmaMcpProviderSchemaInvariant();
   verifyCodexPromptHeader();
   verifyNoEnglishTemplateLeak();
   verifyCleanupRunsScript();
