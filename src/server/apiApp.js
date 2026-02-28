@@ -1,6 +1,8 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
+const { spawn } = require("child_process");
 const { initDB } = require("../db");
 const {
   sendJson,
@@ -14,7 +16,7 @@ const {
   patchProject,
   deleteProject,
 } = require("../api/projects");
-const { listRuns, createRun } = require("../api/runs");
+const { listRuns, createRun, claimNextQueuedRun, markRunFinished } = require("../api/runs");
 const { handleProjectRunsPost } = require("../routes/runs");
 const { handleAuthLogin } = require("../routes/auth");
 const { handleArtifactsPost, handleArtifactsGet } = require("../routes/artifacts");
@@ -22,9 +24,12 @@ const { requireAuth } = require("../middleware/auth");
 const { logRequest } = require("../middleware/requestLog");
 
 const ROOT_DIR = path.join(__dirname, "..", "..");
+const RUNS_DIR = path.join(ROOT_DIR, ".ai-runs");
+const runJobScript = path.join(ROOT_DIR, "scripts", "run-job.js");
 const connectionsDataPath = path.join(ROOT_DIR, "apps", "hub", "data", "connections.json");
 const connectorsCatalogPath = path.join(ROOT_DIR, "apps", "hub", "data", "connectors.catalog.json");
 const CONNECTION_SCHEMA_VERSION = "1.0";
+const INLINE_RUNNER_TIMEOUT_MS = Number(process.env.RUNNER_TIMEOUT_MS || 45000);
 
 function isServiceUnavailableError(error) {
   return Boolean(error && error.status === 503 && error.failure_code === "service_unavailable");
@@ -146,13 +151,338 @@ function buildConnectionItems(connections, updatedAt) {
   ];
 }
 
+function sanitizeRunnerMeta(meta = {}) {
+  const safe = {};
+  Object.entries(meta || {}).forEach(([key, value]) => {
+    if (/token|secret|password|api[_-]?key/i.test(String(key))) {
+      const text = typeof value === "string" ? value : "";
+      safe[key] = { has_secret: text.length > 0, secret_len: text.length };
+      return;
+    }
+    if (value === null || ["string", "number", "boolean"].includes(typeof value)) {
+      safe[key] = value;
+      return;
+    }
+    safe[key] = String(value);
+  });
+  return safe;
+}
+
+function appendInlineAudit(runId, event, meta = {}) {
+  if (!runId) {
+    return;
+  }
+  const dir = path.join(RUNS_DIR, runId);
+  fs.mkdirSync(dir, { recursive: true });
+  const line = JSON.stringify({
+    event,
+    ts: new Date().toISOString(),
+    run_id: runId,
+    ...sanitizeRunnerMeta(meta),
+  });
+  fs.appendFileSync(path.join(dir, "audit.jsonl"), `${line}\n`);
+}
+
+function emitRunnerLog(event, runId, meta = {}) {
+  const payload = {
+    event,
+    run_id: runId,
+    ...sanitizeRunnerMeta(meta),
+  };
+  console.log(JSON.stringify(payload));
+  appendInlineAudit(runId, event, meta);
+}
+
+function summarizeChecks(checks = []) {
+  const failing = checks.filter((entry) => entry && entry.ok === false).map((entry) => entry.id || "unknown");
+  return {
+    total: checks.length,
+    passed: checks.length - failing.length,
+    failing,
+  };
+}
+
+function writeInlineFailureArtifacts({ runId, jobType, runMode, inputs, reason }) {
+  const dir = path.join(RUNS_DIR, runId);
+  fs.mkdirSync(dir, { recursive: true });
+  const checks = [{ id: "inline_runner", ok: false, reason }];
+  const runJson = {
+    job: {
+      job_type: jobType,
+      run_mode: runMode,
+      inputs: inputs || {},
+    },
+    runnerResult: {
+      status: "error",
+      errors: [reason],
+      checks,
+      checks_summary: summarizeChecks(checks),
+      logs: [`RUNNER_DONE status=failed reason=${reason}`],
+    },
+    meta: {
+      schema_version: "api-inline/v1",
+      created_at: new Date().toISOString(),
+    },
+  };
+  fs.writeFileSync(path.join(dir, "run.json"), JSON.stringify(runJson, null, 2), "utf8");
+  const summary = [
+    "# Inline Runner Summary",
+    "",
+    `- run_id: ${runId}`,
+    "- status: failed",
+    "",
+    "## Failure",
+    `- reason: ${reason}`,
+    "",
+  ].join("\n");
+  fs.writeFileSync(path.join(dir, "summary.md"), summary, "utf8");
+}
+
+function parseRunInputs(raw) {
+  if (typeof raw !== "string" || !raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function buildJobPayloadFromApiRun(row) {
+  const inputs = parseRunInputs(row.inputs_json);
+  if (row.job_type === "integration_hub.phase1.code_to_figma_from_url") {
+    const runMode = row.run_mode || "mcp";
+    return {
+      job_type: row.job_type,
+      goal: "api queued run",
+      inputs: {
+        message: "api queued run",
+        target_path: ".ai-runs/{{run_id}}/code_to_figma_report.json",
+        mcp_provider:
+          typeof inputs.mcp_provider === "string" && inputs.mcp_provider.trim()
+            ? inputs.mcp_provider.trim()
+            : "local_stub",
+        page_url: typeof inputs.page_url === "string" ? inputs.page_url.trim() : "https://example.com",
+        figma_file_key:
+          typeof inputs.figma_file_key === "string" && inputs.figma_file_key.trim()
+            ? inputs.figma_file_key.trim()
+            : "CutkQD2XudkCe8eJ1jDfkZ",
+      },
+      constraints: {
+        allowed_paths: [".ai-runs/"],
+        max_files_changed: 1,
+        no_destructive_ops: true,
+      },
+      acceptance_criteria: ["summary.md and run.json are written"],
+      provenance: {
+        issue: "",
+        operator: "operator",
+      },
+      run_mode: runMode,
+      output_language: "ja",
+      expected_artifacts: [
+        { name: "code_to_figma_report.json", description: "report" },
+        { name: "summary.md", description: "summary" },
+      ],
+    };
+  }
+  throw new Error(`unsupported_job_type:${row.job_type || "-"}`);
+}
+
+function runJobProcess(jobPayload) {
+  const beforeRuns = new Set(fs.existsSync(RUNS_DIR) ? fs.readdirSync(RUNS_DIR) : []);
+  return new Promise((resolve, reject) => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "api-inline-run-"));
+    const jobPath = path.join(tmpDir, "job.json");
+    fs.writeFileSync(jobPath, JSON.stringify(jobPayload, null, 2), "utf8");
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    const child = spawn(process.execPath, [runJobScript, "--job", jobPath, "--role", "operator"], {
+      cwd: ROOT_DIR,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+      shell: false,
+    });
+    const timeoutMs = Number.isFinite(INLINE_RUNNER_TIMEOUT_MS) && INLINE_RUNNER_TIMEOUT_MS > 0 ? INLINE_RUNNER_TIMEOUT_MS : 45000;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      try {
+        child.kill("SIGKILL");
+      } catch {
+        // ignore
+      }
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", (error) => {
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timeout);
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch {
+        // ignore
+      }
+      const afterRuns = new Set(fs.existsSync(RUNS_DIR) ? fs.readdirSync(RUNS_DIR) : []);
+      const newRuns = [];
+      afterRuns.forEach((name) => {
+        if (!beforeRuns.has(name)) {
+          newRuns.push(name);
+        }
+      });
+      let inferredRunId = null;
+      if (newRuns.length > 0) {
+        inferredRunId = newRuns[0];
+      }
+      if (code !== 0) {
+        resolve({ code, result: null, stdout, stderr, runId: inferredRunId, timedOut, timeoutMs });
+        return;
+      }
+      const lines = String(stdout || "")
+        .trim()
+        .split(/\r?\n/)
+        .filter(Boolean);
+      const lastLine = lines.length ? lines[lines.length - 1] : "{}";
+      let parsed = null;
+      try {
+        parsed = JSON.parse(lastLine);
+      } catch {
+        parsed = null;
+      }
+      if ((!parsed || !parsed.run_id) && inferredRunId) {
+        const runJsonPath = path.join(RUNS_DIR, inferredRunId, "run.json");
+        if (fs.existsSync(runJsonPath)) {
+          try {
+            const runJson = JSON.parse(fs.readFileSync(runJsonPath, "utf8"));
+            const runnerResult = runJson && runJson.runnerResult ? runJson.runnerResult : runJson;
+            parsed = { ...(runnerResult || {}), run_id: inferredRunId };
+          } catch {
+            // ignore parse fallback error
+          }
+        }
+      }
+      resolve({ code, result: parsed, stdout, stderr, runId: inferredRunId, timedOut, timeoutMs });
+    });
+  });
+}
+
+function mirrorRunArtifacts(apiRunId, childRunId) {
+  if (!apiRunId || !childRunId || apiRunId === childRunId) {
+    return;
+  }
+  const srcDir = path.join(RUNS_DIR, childRunId);
+  const dstDir = path.join(RUNS_DIR, apiRunId);
+  if (!fs.existsSync(srcDir)) {
+    return;
+  }
+  fs.mkdirSync(dstDir, { recursive: true });
+  const files = ["run.json", "summary.md", "audit.jsonl"];
+  files.forEach((name) => {
+    const src = path.join(srcDir, name);
+    const dst = path.join(dstDir, name);
+    if (fs.existsSync(src)) {
+      if (name === "audit.jsonl" && fs.existsSync(dst)) {
+        const body = fs.readFileSync(src, "utf8");
+        if (body) {
+          fs.appendFileSync(dst, body);
+        }
+      } else {
+        fs.copyFileSync(src, dst);
+      }
+    }
+  });
+}
+
+function createInlineRunner(db) {
+  let busy = false;
+  const tick = async () => {
+    if (busy) {
+      return;
+    }
+    const row = claimNextQueuedRun(db);
+    if (!row || !row.id) {
+      return;
+    }
+    busy = true;
+    emitRunnerLog("RUNNER_PICKED", row.id, { job_type: row.job_type || "-", run_mode: row.run_mode || "mcp" });
+    try {
+      const payload = buildJobPayloadFromApiRun(row);
+      const execResult = await runJobProcess(payload);
+      const runnerResult = execResult.result || {};
+      const childRunId = runnerResult.run_id || execResult.runId || null;
+      if (childRunId) {
+        mirrorRunArtifacts(row.id, childRunId);
+      }
+      if (execResult.timedOut) {
+        const reason = `runner_timeout_ms=${execResult.timeoutMs}`;
+        writeInlineFailureArtifacts({
+          runId: row.id,
+          jobType: row.job_type,
+          runMode: row.run_mode,
+          inputs: parseRunInputs(row.inputs_json),
+          reason,
+        });
+        markRunFinished(db, row.id, { status: "failed", failureCode: "timeout" });
+        emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason: "timeout" });
+      } else if (execResult.code === 0 && runnerResult.status === "ok") {
+        markRunFinished(db, row.id, { status: "completed", failureCode: null });
+        emitRunnerLog("RUNNER_DONE", row.id, { status: "completed", reason: "-" });
+      } else {
+        const reason = (runnerResult.errors && runnerResult.errors[0]) || "inline_runner_failed";
+        writeInlineFailureArtifacts({
+          runId: row.id,
+          jobType: row.job_type,
+          runMode: row.run_mode,
+          inputs: parseRunInputs(row.inputs_json),
+          reason,
+        });
+        markRunFinished(db, row.id, { status: "failed", failureCode: "service_unavailable" });
+        emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason: "service_unavailable" });
+      }
+    } catch {
+      writeInlineFailureArtifacts({
+        runId: row.id,
+        jobType: row.job_type,
+        runMode: row.run_mode,
+        inputs: parseRunInputs(row.inputs_json),
+        reason: "inline_runner_exception",
+      });
+      markRunFinished(db, row.id, { status: "failed", failureCode: "service_unavailable" });
+      emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason: "service_unavailable" });
+    } finally {
+      busy = false;
+    }
+  };
+  const interval = setInterval(() => {
+    tick().catch(() => {
+      // ignore runner tick error
+    });
+  }, 500);
+  if (typeof interval.unref === "function") {
+    interval.unref();
+  }
+  return {
+    kick: () => tick().catch(() => {}),
+    stop: () => clearInterval(interval),
+  };
+}
+
 function createApiServer(dbConn) {
   const db =
     dbConn && dbConn.constructor && dbConn.constructor.name === "Database"
       ? dbConn
       : initDB();
+  const inlineRunner = String(process.env.RUNNER_MODE || "").toLowerCase() === "inline" ? createInlineRunner(db) : null;
 
-  return http.createServer(async (req, res) => {
+  const server = http.createServer(async (req, res) => {
     const urlPath = (req.url || "").split("?")[0] || "/";
     const method = (req.method || "GET").toUpperCase();
     const start = process.hrtime.bigint();
@@ -285,7 +615,11 @@ function createApiServer(dbConn) {
           }
           const inputs =
             body && typeof body.inputs === "object" && body.inputs !== null ? body.inputs : {};
-          const runId = createRun(db, { job_type: jobType, inputs, target_path: targetPath });
+          const runMode = typeof body.run_mode === "string" && body.run_mode.trim() ? body.run_mode.trim() : "mcp";
+          const runId = createRun(db, { job_type: jobType, run_mode: runMode, inputs, target_path: targetPath });
+          if (inlineRunner) {
+            inlineRunner.kick();
+          }
           return sendJson(res, 201, { run_id: runId, status: "queued" });
         }
         res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
@@ -380,6 +714,10 @@ function createApiServer(dbConn) {
       throw error;
     }
   });
+  if (inlineRunner) {
+    server.on("close", () => inlineRunner.stop());
+  }
+  return server;
 }
 
 module.exports = { createApiServer };

@@ -1,5 +1,45 @@
 # MCP Runner Interface (Phase2 Bridge)
 
+## P0-04 Operational SoT (VPS Single-Node E2E)
+- `RUNNER_MODE=inline` is the only supported entrypoint for VPS-local end-to-end execution of `/api/runs` (`queued -> running -> completed/failed`) without external worker infrastructure.
+- Required env:
+  - `JWT_SECRET` (if missing/invalid, `/api/auth/login` fails and API auth flow cannot run).
+- Recommended env:
+  - `RUNNER_MODE=inline` (enables the inline queue worker on API server startup).
+- Secret policy:
+  - Do not record secret values in docs/logs/issues/PRs. Record only presence/length when needed.
+
+### Minimal Execution Example (Auth + Run + Artifacts)
+```bash
+BASE="http://127.0.0.1:3001"
+
+# 1) login (id/password must match seeded user; do not print secrets)
+curl -sS -X POST "$BASE/api/auth/login" -H 'content-type: application/json' \
+  -d '{"id":"<user-id>","password":"<password>"}' \
+  | tee /tmp/login.json
+TOKEN=$(node -e "const j=require('/tmp/login.json'); console.log(j.token||j.jwt||j.access_token||'')")
+echo "TOKEN_LEN=${#TOKEN}"
+
+# 2) enqueue Phase1 local_stub run
+curl -sS -X POST "$BASE/api/runs" \
+  -H "content-type: application/json" \
+  -H "authorization: Bearer $TOKEN" \
+  -d '{"job_type":"integration_hub.phase1.code_to_figma_from_url","run_mode":"mcp","target_path":"vault/tmp","inputs":{"mcp_provider":"local_stub","page_url":"https://example.com","target_path":"vault/tmp"}}' \
+  | tee /tmp/run_create.json
+
+# 3) poll runs list until completed/failed
+RID=$(node -e "const t=require('fs').readFileSync('/tmp/run_create.json','utf8'); const m=t.match(/\"run_id\":\"([^\"]+)\"/); console.log(m?m[1]:'')")
+for i in {1..30}; do
+  curl -sS "$BASE/api/runs" -H "authorization: Bearer $TOKEN" | tee /tmp/runs_list.json >/dev/null
+  node -e "const rid=process.argv[1]; const rows=require('/tmp/runs_list.json'); const r=Array.isArray(rows)?rows.find(x=>x.run_id===rid):null; console.log(r?r.status:'missing'); if(r&&['completed','failed'].includes(r.status)) process.exit(0); process.exit(1);" "$RID" && break
+  sleep 1
+done
+
+# 4) artifacts
+ls -la ".ai-runs/$RID" || true
+sed -n '1,160p' ".ai-runs/$RID/summary.md" 2>/dev/null || true
+```
+
 ## Purpose
 - Provide a transport-agnostic adapter so Phase1 local stubs and future MCP/real integrations share the same job contract.
 - Allow the Phase1 Hub (`/api/run`) to invoke MCP-compatible runners via a CLI command while preserving the `runnerResult` schema.
