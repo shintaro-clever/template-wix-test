@@ -1,0 +1,38 @@
+{
+  "job_type": "integration_hub.phase1.code_to_figma_from_url",
+  "goal": "Phase1 standard entrypoint via MCP local_stub",
+  "inputs": {
+    "message": "phase1 code to figma local stub",
+    "mcp_provider": "local_stub",
+    "page_url": "https://example.com",
+    "target_path": "vault/tmp"
+  },
+  "constraints": {
+    "allowed_paths": [
+      ".ai-runs/",
+      "vault/"
+    ],
+    "max_files_changed": 1,
+    "no_destructive_ops": true
+  },
+  "acceptance_criteria": [
+    "summary.md and run.json are produced",
+    "frames/progress are present in summary via MCP local_stub"
+  ],
+  "provenance": {
+    "issue": "#52",
+    "operator": "operator"
+  },
+  "run_mode": "mcp",
+  "output_language": "ja",
+  "expected_artifacts": [
+    {
+      "name": "summary.md",
+      "description": "code to figma summary"
+    },
+    {
+      "name": "run.json",
+      "description": "hub run record"
+    }
+  ]
+}
