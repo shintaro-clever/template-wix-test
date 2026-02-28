@@ -96,6 +96,9 @@ function ensureRunColumns(db) {
   if (!columns.includes("target_path")) {
     db.exec("ALTER TABLE runs ADD COLUMN target_path TEXT");
   }
+  if (!columns.includes("run_mode")) {
+    db.exec("ALTER TABLE runs ADD COLUMN run_mode TEXT");
+  }
 }
 
 function ensureJobTemplates(db) {

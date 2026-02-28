@@ -842,6 +842,39 @@ function normalizePageUrl(raw) {
   return parsed.toString();
 }
 
+const NON_HTML_PATH_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.svg',
+  '.ico',
+  '.bmp',
+  '.avif',
+  '.pdf',
+  '.mp4',
+  '.mp3',
+  '.zip',
+  '.rar',
+  '.7z',
+  '.tar',
+  '.gz',
+  '.woff',
+  '.woff2',
+  '.ttf'
+]);
+
+function hasNonHtmlExtension(pathname = '') {
+  const lower = String(pathname || '').toLowerCase();
+  for (const ext of NON_HTML_PATH_EXTENSIONS) {
+    if (lower.endsWith(ext)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function extractSameOriginLinks(startUrl, html, maxPages = 20) {
   const base = new URL(startUrl);
   const pages = [startUrl];
@@ -863,6 +896,9 @@ function extractSameOriginLinks(startUrl, html, maxPages = 20) {
       continue;
     }
     if (parsed.origin !== base.origin) {
+      continue;
+    }
+    if (hasNonHtmlExtension(parsed.pathname)) {
       continue;
     }
     if (parsed.search) {

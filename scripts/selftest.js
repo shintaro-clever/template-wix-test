@@ -12,6 +12,7 @@ const { resolveHostPort } = require('../src/server/config');
 const { createApp } = require('../src/server/app');
 const { extractSameOriginLinks, normalizePageUrl } = require('./run-job');
 const { runJobClient } = require('../src/runner/runJobClient');
+const { run: runMcpAdapter } = require('../src/runnerAdapter');
 const {
   createRunRecord,
   getRunById,
@@ -468,6 +469,32 @@ function verifyCodeToFigmaPageCollection() {
   assert(pages.includes('https://example.com/page-c'), 'hash should be removed from collected URLs');
 }
 
+function verifyCodeToFigmaPageCollectionFixture() {
+  const fixturePath = path.join(__dirname, '..', 'tests', 'selftest', 'fixtures', 'page_collection_noise.html');
+  assert(fs.existsSync(fixturePath), 'page collection fixture should exist');
+  const html = fs.readFileSync(fixturePath, 'utf8');
+  const startUrl = normalizePageUrl('https://example.com/start');
+  const pages = extractSameOriginLinks(startUrl, html, 20);
+  assert(Array.isArray(pages), 'fixture pages should be array');
+  assert(pages[0] === startUrl, 'fixture pages should include start URL first');
+  assert(pages.includes('https://example.com/page-a'), 'fixture should include same-origin html page');
+  assert(pages.includes('https://example.com/docs/getting-started'), 'fixture should include docs path');
+  assert(pages.includes('https://example.com/page-c'), 'fixture should include hash-normalized page');
+  const forbiddenPatterns = [
+    'mailto:',
+    'tel:',
+    'javascript:',
+    '.png',
+    '.jpg',
+    '.pdf',
+    '.mp4',
+    '?query='
+  ];
+  forbiddenPatterns.forEach((pattern) => {
+    assert(!pages.some((url) => String(url).toLowerCase().includes(pattern)), `fixture should exclude ${pattern}`);
+  });
+}
+
 function verifyCodeToFigmaProgressLogs() {
   const tmpJobPath = path.join(os.tmpdir(), `sample-job.code_to_figma.progress.${Date.now()}.json`);
   const payload = {
@@ -624,6 +651,20 @@ function verifyCodeToFigmaMcpLocalStubFrames() {
       .split(/\r?\n/)
       .filter((line) => line.includes('- frames[]:') && line.includes('status: success'));
     assert(frameLines.length >= 2, 'summary should include success frames from mcp local_stub');
+    const mcpReportPath = path.join(RUNS_ROOT, runId, 'code_to_figma_mcp_report.json');
+    assert(fs.existsSync(mcpReportPath), 'code_to_figma_mcp_report.json must exist');
+    const mcpReport = JSON.parse(fs.readFileSync(mcpReportPath, 'utf8'));
+    const codeToFigma = mcpReport && mcpReport.code_to_figma ? mcpReport.code_to_figma : {};
+    const payloads = Array.isArray(codeToFigma.frame_payloads) ? codeToFigma.frame_payloads : [];
+    assert(payloads.length >= 1, 'mcp report should include frame_payloads');
+    const firstPayload = payloads[0] && payloads[0].payload ? payloads[0].payload : {};
+    const firstFrame = firstPayload && firstPayload.frame ? firstPayload.frame : {};
+    assert(firstFrame.layoutMode === 'VERTICAL', 'mcp payload page frame should include vertical auto layout');
+    const sections = Array.isArray(firstFrame.children) ? firstFrame.children.filter((node) => /^Section \d{2}$/.test(String(node && node.name))) : [];
+    assert(sections.length >= 2, 'mcp payload should include section frames');
+    sections.forEach((section) => {
+      assert(section.layoutMode === 'VERTICAL', 'mcp payload section should include vertical auto layout');
+    });
   } finally {
     try {
       fs.unlinkSync(tmpJobPath);
@@ -710,6 +751,46 @@ function verifyCodeToFigmaMcpProviderSchemaInvariant() {
   assert(
     normalize(local.progressLine) === normalize(codex.progressLine),
     'provider switch should keep progress[] summary schema'
+  );
+}
+
+async function verifyCodexCliSafetyRails() {
+  const blockedPathJob = {
+    job_type: 'integration_hub.phase1.code_to_figma_from_url',
+    run_mode: 'mcp',
+    inputs: {
+      mcp_provider: 'codex-cli',
+      page_url: 'https://example.com',
+      target_path: '../escape/report.json',
+      layout_minimal: true,
+      figma_token: 'super-secret-token'
+    }
+  };
+  const blockedPath = await runMcpAdapter(blockedPathJob);
+  assert(blockedPath.status === 'error', 'codex-cli should block path traversal target_path');
+  assert(
+    Array.isArray(blockedPath.checks) &&
+      blockedPath.checks.some((entry) => entry && entry.ok === false && entry.reason === 'codex_cli_target_path_blocked'),
+    'codex-cli blocked path should report codex_cli_target_path_blocked'
+  );
+  const blockedPathText = JSON.stringify(blockedPath);
+  assert(!blockedPathText.includes('super-secret-token'), 'codex-cli error payload must not expose secret values');
+
+  const blockedNetworkJob = {
+    job_type: 'integration_hub.phase1.code_to_figma_from_url',
+    run_mode: 'mcp',
+    inputs: {
+      mcp_provider: 'codex-cli',
+      page_url: 'http://127.0.0.1/private',
+      target_path: '.ai-runs/selftest/network.json'
+    }
+  };
+  const blockedNetwork = await runMcpAdapter(blockedNetworkJob);
+  assert(blockedNetwork.status === 'error', 'codex-cli should block private network destinations');
+  assert(
+    Array.isArray(blockedNetwork.checks) &&
+      blockedNetwork.checks.some((entry) => entry && entry.ok === false && entry.reason === 'codex_cli_network_policy_blocked'),
+    'codex-cli blocked network should report codex_cli_network_policy_blocked'
   );
 }
 
@@ -1150,9 +1231,11 @@ async function main() {
   verifyRepoPatch();
   verifyCodeToFigmaSummaryGuarantee();
   verifyCodeToFigmaPageCollection();
+  verifyCodeToFigmaPageCollectionFixture();
   verifyCodeToFigmaProgressLogs();
   verifyCodeToFigmaMcpLocalStubFrames();
   verifyCodeToFigmaMcpProviderSchemaInvariant();
+  await verifyCodexCliSafetyRails();
   verifyCodexPromptHeader();
   verifyNoEnglishTemplateLeak();
   verifyCleanupRunsScript();
