@@ -202,10 +202,19 @@ function summarizeChecks(checks = []) {
   };
 }
 
+function truncateReason(reason, max = 200) {
+  const text = String(reason || "");
+  if (text.length <= max) {
+    return text;
+  }
+  return text.slice(0, max);
+}
+
 function writeInlineFailureArtifacts({ runId, jobType, runMode, inputs, reason }) {
   const dir = path.join(RUNS_DIR, runId);
   fs.mkdirSync(dir, { recursive: true });
-  const checks = [{ id: "inline_runner", ok: false, reason }];
+  const safeReason = truncateReason(reason, 200);
+  const checks = [{ id: "inline_runner", ok: false, reason: safeReason }];
   const runJson = {
     job: {
       job_type: jobType,
@@ -214,10 +223,10 @@ function writeInlineFailureArtifacts({ runId, jobType, runMode, inputs, reason }
     },
     runnerResult: {
       status: "error",
-      errors: [reason],
+      errors: [safeReason],
       checks,
       checks_summary: summarizeChecks(checks),
-      logs: [`RUNNER_DONE status=failed reason=${reason}`],
+      logs: [`RUNNER_DONE status=failed reason=${safeReason}`],
     },
     meta: {
       schema_version: "api-inline/v1",
@@ -232,10 +241,24 @@ function writeInlineFailureArtifacts({ runId, jobType, runMode, inputs, reason }
     "- status: failed",
     "",
     "## Failure",
-    `- reason: ${reason}`,
+    `- reason: ${safeReason}`,
     "",
   ].join("\n");
   fs.writeFileSync(path.join(dir, "summary.md"), summary, "utf8");
+}
+
+function writeInlineRunnerErrorArtifact({ runId, jobType, runMode, error }) {
+  const dir = path.join(RUNS_DIR, runId);
+  fs.mkdirSync(dir, { recursive: true });
+  const payload = {
+    run_id: runId,
+    job_type: jobType || "-",
+    run_mode: runMode || "mcp",
+    phase: "inline_runner",
+    message: String((error && error.message) || "unknown_error"),
+    stack: String((error && error.stack) || ""),
+  };
+  fs.writeFileSync(path.join(dir, "inline_runner_error.json"), JSON.stringify(payload, null, 2), "utf8");
 }
 
 function parseRunInputs(raw) {
@@ -445,18 +468,28 @@ function createInlineRunner(db) {
           reason,
         });
         markRunFinished(db, row.id, { status: "failed", failureCode: "service_unavailable" });
-        emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason: "service_unavailable" });
+        emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason });
       }
-    } catch {
+    } catch (error) {
+      writeInlineRunnerErrorArtifact({
+        runId: row.id,
+        jobType: row.job_type,
+        runMode: row.run_mode,
+        error,
+      });
+      emitRunnerLog("INLINE_RUNNER_ERROR", row.id, {
+        message: String((error && error.message) || "unknown_error"),
+        stack: String((error && error.stack) || ""),
+      });
       writeInlineFailureArtifacts({
         runId: row.id,
         jobType: row.job_type,
         runMode: row.run_mode,
         inputs: parseRunInputs(row.inputs_json),
-        reason: "inline_runner_exception",
+        reason: `inline_runner_exception:${String((error && error.message) || "unknown_error")}`,
       });
       markRunFinished(db, row.id, { status: "failed", failureCode: "service_unavailable" });
-      emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason: "service_unavailable" });
+      emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason: "inline_runner_exception" });
     } finally {
       busy = false;
     }
