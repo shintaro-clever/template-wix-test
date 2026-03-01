@@ -16,6 +16,9 @@
 - Run status tracking is done via `GET /api/runs` list polling and matching `run_id` (no per-run `GET /api/runs/:id` contract).
 - `queued` runs are actually executed only when the API server starts with `RUNNER_MODE=inline`; this is the path that produces `.ai-runs/<run_id>/...` artifacts.
 - `JWT_SECRET` is mandatory for auth flow; without a valid value, login may fail.
+- Supported `job_type` via `/api/runs` (VPS inline runner): `integration_hub.phase1.code_to_figma_from_url` only.
+- Any other `job_type` fails with `unsupported_job_type:<job_type>` and produces `.ai-runs/<run_id>/inline_runner_error.json`.
+- Phase2 smoke jobs (e.g., `integration_hub.phase2.mcp.offline_smoke`) are not supported via `/api/runs` in the current VPS inline runner. Use CLI (`node scripts/run-job.js --job ...`) for Phase2 smoke validations.
 
 ### Minimal Execution Example (Auth + Run + Artifacts)
 ```bash
@@ -32,7 +35,7 @@ echo "TOKEN_LEN=${#TOKEN}"
 curl -sS -X POST "$BASE/api/runs" \
   -H "content-type: application/json" \
   -H "authorization: Bearer $TOKEN" \
-  -d '{"job_type":"integration_hub.phase1.code_to_figma_from_url","run_mode":"mcp","target_path":"vault/tmp","inputs":{"mcp_provider":"local_stub","page_url":"https://example.com","target_path":"vault/tmp"}}' \
+  -d '{"job_type":"integration_hub.phase1.code_to_figma_from_url","run_mode":"mcp","target_path":"vault/tmp","inputs":{"mcp_provider":"local_stub","page_url":"https://example.com"}}' \
   | tee /tmp/run_create.json
 
 # 3) poll runs list until completed/failed
