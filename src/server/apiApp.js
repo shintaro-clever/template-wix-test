@@ -16,7 +16,7 @@ const {
   patchProject,
   deleteProject,
 } = require("../api/projects");
-const { listRuns, createRun, claimNextQueuedRun, markRunFinished } = require("../api/runs");
+const { listRuns, createRun, claimNextQueuedRun, markRunFinished, getRun } = require("../api/runs");
 const { handleProjectRunsPost } = require("../routes/runs");
 const { handleRunsCollection } = require("./routes/runs");
 const { handleAuthLogin } = require("../routes/auth");
@@ -24,6 +24,7 @@ const { handleArtifactsPost, handleArtifactsGet } = require("../routes/artifacts
 const { handleConnectorConnections } = require("./routes/connectors");
 const { handleFigmaIngest } = require("./routes/ingest");
 const { handleJobsFromFigma } = require("./routes/jobs");
+const { handleGithubPrCreate } = require("./routes/github");
 const { requireAuth } = require("../middleware/auth");
 const { logRequest } = require("../middleware/requestLog");
 const { executeLocalRun } = require("../runner/localRunner");
@@ -585,6 +586,9 @@ function createApiServer(dbConn) {
       if (urlPath === "/api/jobs/from-figma") {
         return handleJobsFromFigma(req, res);
       }
+      if (urlPath === "/api/github/pr") {
+        return handleGithubPrCreate(req, res);
+      }
 
       if (urlPath === "/api/connectors") {
         if (method !== "GET") {
@@ -682,6 +686,16 @@ function createApiServer(dbConn) {
             }
           },
         });
+      }
+      if (method === "GET" && /^\/api\/runs\/[^/]+$/.test(urlPath)) {
+        const runId = urlPath.split("/").filter(Boolean)[2];
+        const run = getRun(db, runId);
+        if (!run) {
+          return jsonError(res, 404, "NOT_FOUND", "run not found", {
+            failure_code: "not_found",
+          });
+        }
+        return sendJson(res, 200, run);
       }
 
       // /api/projects/:id
