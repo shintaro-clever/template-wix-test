@@ -99,6 +99,18 @@ function ensureRunColumns(db) {
   if (!columns.includes("run_mode")) {
     db.exec("ALTER TABLE runs ADD COLUMN run_mode TEXT");
   }
+  if (!columns.includes("figma_file_key")) {
+    db.exec("ALTER TABLE runs ADD COLUMN figma_file_key TEXT");
+  }
+  if (!columns.includes("ingest_artifact_path")) {
+    db.exec("ALTER TABLE runs ADD COLUMN ingest_artifact_path TEXT");
+  }
+  if (!columns.includes("github_pr_url")) {
+    db.exec("ALTER TABLE runs ADD COLUMN github_pr_url TEXT");
+  }
+  if (!columns.includes("github_pr_number")) {
+    db.exec("ALTER TABLE runs ADD COLUMN github_pr_number INTEGER");
+  }
 }
 
 function ensureJobTemplates(db) {
