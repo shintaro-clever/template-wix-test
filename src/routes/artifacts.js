@@ -3,8 +3,7 @@ const path = require("path");
 const { DEFAULT_TENANT } = require("../db/sqlite");
 const { createArtifact, getArtifactByName } = require("../db/artifacts");
 const { sendJson, jsonError, readJsonBody } = require("../api/projects");
-
-const REPO_ROOT = path.join(__dirname, "..", "..");
+const { resolvePath } = require("../db/resolvePath");
 
 function validateRelativePath(value) {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -18,10 +17,6 @@ function validateRelativePath(value) {
     return { valid: false };
   }
   return { valid: true, normalized };
-}
-
-function resolvePath(relPath) {
-  return path.resolve(REPO_ROOT, relPath);
 }
 
 async function handleArtifactsPost(req, res) {

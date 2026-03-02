@@ -61,7 +61,16 @@ async function run() {
 
   // Auth baseline
   const unauth = await requestLocal(handler, { method: "GET", url: "/api/projects" });
-  assert(unauth.statusCode === 401, "unauthenticated access should return 401");
+  assert(unauth.statusCode === 200, "GET /api/projects should be public");
+  const publicProjects = JSON.parse(unauth.body.toString("utf8"));
+  assert(Array.isArray(publicProjects), "public projects response should be array");
+
+  const unauthConnectors = await requestLocal(handler, { method: "GET", url: "/api/connectors" });
+  assert(unauthConnectors.statusCode === 401, "unauthenticated connectors should return 401");
+  const unauthBody = JSON.parse(unauthConnectors.body.toString("utf8"));
+  assert(typeof unauthBody.message === "string", "error.message should exist");
+  assert(typeof unauthBody.message_en === "string", "error.message_en should exist");
+  assert(unauthBody.details && typeof unauthBody.details === "object", "error.details should exist");
 
   // Project CRUD happy path (MS0 baseline)
   const jwtToken = jwt.sign(

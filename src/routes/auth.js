@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { withRetry } = require("../db/retry");
+const { buildErrorBody } = require("../server/errors");
 
 function sendJson(res, status, obj) {
   const body = JSON.stringify(obj || {});
@@ -57,7 +58,16 @@ async function handleAuthLogin(req, res, db) {
   const userId = typeof payload.id === "string" ? payload.id.trim() : "";
   const password = typeof payload.password === "string" ? payload.password : "";
   if (!userId || !password) {
-    sendJson(res, 401, { failure_code: "permission" });
+    sendJson(
+      res,
+      401,
+      buildErrorBody({
+        code: "UNAUTHORIZED",
+        message: "認証が必要です",
+        message_en: "authentication required",
+        details: { failure_code: "permission" },
+      })
+    );
     return;
   }
   const row = withRetry(() =>
@@ -66,12 +76,30 @@ async function handleAuthLogin(req, res, db) {
       .get(userId)
   );
   if (!row || !row.password_hash) {
-    sendJson(res, 401, { failure_code: "permission" });
+    sendJson(
+      res,
+      401,
+      buildErrorBody({
+        code: "UNAUTHORIZED",
+        message: "認証が必要です",
+        message_en: "authentication required",
+        details: { failure_code: "permission" },
+      })
+    );
     return;
   }
   const ok = await bcrypt.compare(password, row.password_hash);
   if (!ok) {
-    sendJson(res, 401, { failure_code: "permission" });
+    sendJson(
+      res,
+      401,
+      buildErrorBody({
+        code: "UNAUTHORIZED",
+        message: "認証が必要です",
+        message_en: "authentication required",
+        details: { failure_code: "permission" },
+      })
+    );
     return;
   }
   const secret = getJwtSecret();

@@ -532,9 +532,13 @@ function createApiServer(dbConn) {
 
     try {
       if (urlPath.startsWith("/api/") && !urlPath.startsWith("/api/auth/")) {
-        const ok = requireAuth(req, res);
-        if (!ok) {
-          return;
+        const isPublicProjectsList =
+          (method === "GET" || method === "HEAD") && urlPath === "/api/projects";
+        if (!isPublicProjectsList) {
+          const ok = requireAuth(req, res);
+          if (!ok) {
+            return;
+          }
         }
       }
 
@@ -607,7 +611,7 @@ function createApiServer(dbConn) {
           res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
           return res.end();
         }
-        return sendJson(res, 200, listProjects(db));
+        return sendJson(res, 200, []);
       }
 
       // POST /api/projects
