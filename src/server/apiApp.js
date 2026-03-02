@@ -18,8 +18,12 @@ const {
 } = require("../api/projects");
 const { listRuns, createRun, claimNextQueuedRun, markRunFinished } = require("../api/runs");
 const { handleProjectRunsPost } = require("../routes/runs");
+const { handleRunsCollection } = require("./routes/runs");
 const { handleAuthLogin } = require("../routes/auth");
 const { handleArtifactsPost, handleArtifactsGet } = require("../routes/artifacts");
+const { handleConnectorConnections } = require("./routes/connectors");
+const { handleFigmaIngest } = require("./routes/ingest");
+const { handleJobsFromFigma } = require("./routes/jobs");
 const { requireAuth } = require("../middleware/auth");
 const { logRequest } = require("../middleware/requestLog");
 
@@ -542,6 +546,23 @@ function createApiServer(dbConn) {
         return sendJson(res, 200, { status: "ok" });
       }
 
+      if (urlPath.startsWith("/api/connectors/connections")) {
+        const handled = await handleConnectorConnections(req, res, db);
+        if (handled === false) {
+          res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
+          return res.end("Method not allowed");
+        }
+        return;
+      }
+
+      if (urlPath === "/api/ingest/figma") {
+        return handleFigmaIngest(req, res);
+      }
+
+      if (urlPath === "/api/jobs/from-figma") {
+        return handleJobsFromFigma(req, res);
+      }
+
       if (urlPath === "/api/connectors") {
         if (method !== "GET") {
           res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
@@ -631,32 +652,13 @@ function createApiServer(dbConn) {
 
       // GET/POST /api/runs
       if (urlPath === "/api/runs") {
-        if (method === "GET") {
-          return sendJson(res, 200, listRuns(db));
-        }
-        if (method === "POST") {
-          let body;
-          try {
-            body = await readJsonBody(req);
-          } catch {
-            return jsonError(res, 400, "VALIDATION_ERROR", "JSONが不正です");
-          }
-          const jobType = typeof body.job_type === "string" ? body.job_type.trim() : "";
-          const targetPath = typeof body.target_path === "string" ? body.target_path.trim() : "";
-          if (!jobType || !targetPath) {
-            return jsonError(res, 400, "VALIDATION_ERROR", "入力が不正です");
-          }
-          const inputs =
-            body && typeof body.inputs === "object" && body.inputs !== null ? body.inputs : {};
-          const runMode = typeof body.run_mode === "string" && body.run_mode.trim() ? body.run_mode.trim() : "mcp";
-          const runId = createRun(db, { job_type: jobType, run_mode: runMode, inputs, target_path: targetPath });
-          if (inlineRunner) {
-            inlineRunner.kick();
-          }
-          return sendJson(res, 201, { run_id: runId, status: "queued" });
-        }
-        res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
-        return res.end("Method not allowed");
+        return handleRunsCollection(req, res, db, {
+          onRunQueued: () => {
+            if (inlineRunner) {
+              inlineRunner.kick();
+            }
+          },
+        });
       }
 
       // /api/projects/:id

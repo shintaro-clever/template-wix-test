@@ -7,7 +7,12 @@ const { createPlanWriter } = require("../../plans/writer");
 const { readIngestArtifact, buildPlan, buildJobFromPlan } = require("../../plans/figmaToJob");
 const { generatePatchFromJob } = require("../../ai/generatePatch");
 const { writePatchArtifact } = require("../../patch/format");
-const { updateRunTrace } = require("../../db/runTrace");
+let updateRunTrace = null;
+try {
+  ({ updateRunTrace } = require("../../db/runTrace"));
+} catch {
+  updateRunTrace = null;
+}
 
 function writeJobArtifact(runId, job) {
   const relativePath = `.ai-runs/${runId}/job.json`;
@@ -60,11 +65,13 @@ async function handleJobsFromFigma(req, res) {
       typeof ingest.payload?.figma_file_key === "string" && ingest.payload.figma_file_key.trim()
         ? ingest.payload.figma_file_key.trim()
         : null;
-    updateRunTrace({
-      runId,
-      ingestArtifactPath: ingest.relativePath,
-      figmaFileKey,
-    });
+    if (typeof updateRunTrace === "function") {
+      updateRunTrace({
+        runId,
+        ingestArtifactPath: ingest.relativePath,
+        figmaFileKey,
+      });
+    }
     writer.writePlan(plan);
     writer.appendLog("plan generated");
 

@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const { resolvePath } = require("../db/resolvePath");
 
 function readIngestArtifact(relativePath) {
   const normalized = String(relativePath || "").replace(/\\/g, "/");
@@ -10,7 +9,7 @@ function readIngestArtifact(relativePath) {
     error.failure_code = "validation_error";
     throw error;
   }
-  const absolute = resolvePath(normalized);
+  const absolute = path.resolve(process.cwd(), normalized);
   if (!fs.existsSync(absolute)) {
     const error = new Error("ingest artifact not found");
     error.status = 404;

@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const { resolvePath } = require("../../db/resolvePath");
 
 const DEFAULT_ALLOWED_PATHS = ["vault/tmp/"];
 
@@ -26,7 +25,7 @@ function ensureAllowedPath(relativePath, allowedPaths = DEFAULT_ALLOWED_PATHS) {
 function writeIngestFile({ fileName, buffer, allowedPaths = DEFAULT_ALLOWED_PATHS }) {
   const relativePath = normalizeRelativePath(fileName);
   ensureAllowedPath(relativePath, allowedPaths);
-  const absolutePath = resolvePath(relativePath);
+  const absolutePath = path.resolve(process.cwd(), relativePath);
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
   fs.writeFileSync(absolutePath, buffer);
   return {
