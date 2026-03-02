@@ -22,6 +22,7 @@ const { handleAuthLogin } = require("../routes/auth");
 const { handleArtifactsPost, handleArtifactsGet } = require("../routes/artifacts");
 const { requireAuth } = require("../middleware/auth");
 const { logRequest } = require("../middleware/requestLog");
+const { executeLocalRun } = require("../runner/localRunner");
 
 const ROOT_DIR = path.join(__dirname, "..", "..");
 const RUNS_DIR = path.join(ROOT_DIR, ".ai-runs");
@@ -438,37 +439,55 @@ function createInlineRunner(db) {
     emitRunnerLog("RUNNER_PICKED", row.id, { job_type: row.job_type || "-", run_mode: row.run_mode || "mcp" });
     try {
       const payload = buildJobPayloadFromApiRun(row);
-      const execResult = await runJobProcess(payload);
-      const runnerResult = execResult.result || {};
-      const childRunId = runnerResult.run_id || execResult.runId || null;
-      if (childRunId) {
-        mirrorRunArtifacts(row.id, childRunId);
-      }
-      if (execResult.timedOut) {
-        const reason = `runner_timeout_ms=${execResult.timeoutMs}`;
-        writeInlineFailureArtifacts({
+      if (String(process.env.RUNNER_MODE || "").toLowerCase() === "local") {
+        const localResult = executeLocalRun({
           runId: row.id,
           jobType: row.job_type,
           runMode: row.run_mode,
           inputs: parseRunInputs(row.inputs_json),
-          reason,
+          targetPath: row.target_path,
         });
-        markRunFinished(db, row.id, { status: "failed", failureCode: "timeout" });
-        emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason: "timeout" });
-      } else if (execResult.code === 0 && runnerResult.status === "ok") {
-        markRunFinished(db, row.id, { status: "completed", failureCode: null });
-        emitRunnerLog("RUNNER_DONE", row.id, { status: "completed", reason: "-" });
+        if (localResult.status === "completed") {
+          markRunFinished(db, row.id, { status: "completed", failureCode: null });
+          emitRunnerLog("RUNNER_DONE", row.id, { status: "completed", reason: "-" });
+        } else {
+          const failure = localResult.failure_code || "run_failed";
+          markRunFinished(db, row.id, { status: "failed", failureCode: failure });
+          emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason: failure });
+        }
       } else {
-        const reason = (runnerResult.errors && runnerResult.errors[0]) || "inline_runner_failed";
-        writeInlineFailureArtifacts({
-          runId: row.id,
-          jobType: row.job_type,
-          runMode: row.run_mode,
-          inputs: parseRunInputs(row.inputs_json),
-          reason,
-        });
-        markRunFinished(db, row.id, { status: "failed", failureCode: "service_unavailable" });
-        emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason });
+        const execResult = await runJobProcess(payload);
+        const runnerResult = execResult.result || {};
+        const childRunId = runnerResult.run_id || execResult.runId || null;
+        if (childRunId) {
+          mirrorRunArtifacts(row.id, childRunId);
+        }
+        if (execResult.timedOut) {
+          const reason = `runner_timeout_ms=${execResult.timeoutMs}`;
+          writeInlineFailureArtifacts({
+            runId: row.id,
+            jobType: row.job_type,
+            runMode: row.run_mode,
+            inputs: parseRunInputs(row.inputs_json),
+            reason,
+          });
+          markRunFinished(db, row.id, { status: "failed", failureCode: "service_unavailable" });
+          emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason: "timeout" });
+        } else if (execResult.code === 0 && runnerResult.status === "ok") {
+          markRunFinished(db, row.id, { status: "completed", failureCode: null });
+          emitRunnerLog("RUNNER_DONE", row.id, { status: "completed", reason: "-" });
+        } else {
+          const reason = (runnerResult.errors && runnerResult.errors[0]) || "inline_runner_failed";
+          writeInlineFailureArtifacts({
+            runId: row.id,
+            jobType: row.job_type,
+            runMode: row.run_mode,
+            inputs: parseRunInputs(row.inputs_json),
+            reason,
+          });
+          markRunFinished(db, row.id, { status: "failed", failureCode: "service_unavailable" });
+          emitRunnerLog("RUNNER_DONE", row.id, { status: "failed", reason });
+        }
       }
     } catch (error) {
       writeInlineRunnerErrorArtifact({
