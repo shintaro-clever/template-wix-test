@@ -3,6 +3,7 @@ const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
 const { applyCodexPrompt } = require('../codex/prompt');
+const { buildErrorBody } = require('./errors');
 
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const distDir = path.join(ROOT_DIR, 'apps', 'hub', 'dist');
@@ -626,12 +627,27 @@ function summarizeRun(runId) {
       Array.isArray(runJson.runnerResult.artifacts) &&
       runJson.runnerResult.artifacts.map((entry) => entry && entry.path).filter(Boolean)) ||
     [];
+  const figmaFileKey =
+    (runJson &&
+      runJson.job &&
+      runJson.job.inputs &&
+      typeof runJson.job.inputs.figma_file_key === 'string' &&
+      runJson.job.inputs.figma_file_key) ||
+    null;
+  const githubPrUrl =
+    (runJson &&
+      runJson.runnerResult &&
+      typeof runJson.runnerResult.github_pr_url === 'string' &&
+      runJson.runnerResult.github_pr_url) ||
+    null;
   return {
     run_id: runId,
     job_type: jobType,
     status,
     created_at: createdAt,
-    artifacts
+    artifacts,
+    figma_file_key: figmaFileKey,
+    github_pr_url: githubPrUrl
   };
 }
 
@@ -738,6 +754,10 @@ function readBootstrapNodes(runId) {
 function sendJson(res, statusCode, body, extraHeaders = {}) {
   res.writeHead(statusCode, { 'Content-Type': 'application/json', ...extraHeaders });
   res.end(JSON.stringify(body));
+}
+
+function sendJsonError(res, statusCode, code, message, details = {}) {
+  sendJson(res, statusCode, buildErrorBody({ code, message, details }));
 }
 
 const CORS_JSON_HEADERS = {
@@ -914,7 +934,7 @@ async function handleSmokeApi(req, res, method) {
 
 function handleRunsApi(req, res, method, runId) {
   if (method !== 'GET') {
-    sendJson(res, 405, { error: 'Method not allowed' });
+    sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed', { failure_code: 'validation_error' });
     return;
   }
   if (!runId) {
@@ -924,7 +944,7 @@ function handleRunsApi(req, res, method, runId) {
   }
   const detail = getRunDetail(runId);
   if (!detail) {
-    sendJson(res, 404, { error: 'run not found' });
+    sendJsonError(res, 404, 'NOT_FOUND', 'run not found', { failure_code: 'not_found' });
     return;
   }
   sendJson(res, 200, detail);
@@ -1076,6 +1096,15 @@ async function handleRequest(req, res) {
   }
   if (urlPath === '/api/smoke') {
     await handleSmokeApi(req, res, method);
+    return;
+  }
+  if ((method === 'GET' || method === 'HEAD') && urlPath === '/api/projects') {
+    if (method === 'HEAD') {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end();
+      return;
+    }
+    sendJson(res, 200, []);
     return;
   }
   if (segments[0] === 'api' && segments[1] === 'runs') {

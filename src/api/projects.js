@@ -2,6 +2,7 @@ const { DEFAULT_TENANT } = require("../db/sqlite");
 const crypto = require("crypto");
 const { recordAudit, AUDIT_ACTIONS } = require("../middleware/audit");
 const { withRetry } = require("../db/retry");
+const { buildErrorBody } = require("../server/errors");
 
 function sendJson(res, status, obj) {
   const body = JSON.stringify(obj);
@@ -13,9 +14,15 @@ function sendJson(res, status, obj) {
 }
 
 function jsonError(res, status, code, message, details) {
-  const body = { code, message };
-  if (details) body.details = details;
-  sendJson(res, status, body);
+  sendJson(
+    res,
+    status,
+    buildErrorBody({
+      code,
+      message,
+      details: details || {},
+    })
+  );
 }
 
 function readJsonBody(req) {

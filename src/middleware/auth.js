@@ -1,10 +1,20 @@
 // src/middleware/auth.js
 const jwt = require("jsonwebtoken");
+const { buildErrorBody } = require("../server/errors");
 
 function unauthorized(res) {
   if (res && typeof res.writeHead === "function") {
     res.writeHead(401, { "Content-Type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ error: "UNAUTHORIZED" }));
+    res.end(
+      JSON.stringify(
+        buildErrorBody({
+          code: "UNAUTHORIZED",
+          message: "認証が必要です",
+          message_en: "authentication required",
+          details: { failure_code: "permission" },
+        })
+      )
+    );
   }
 }
 
