@@ -1,6 +1,7 @@
 const { buildErrorBody } = require("../server/errors");
 const { issueJwtToken } = require("../auth/jwt");
-const { DEFAULT_TENANT } = require("../db");
+const { DEFAULT_TENANT } = require("../db/sqlite");
+const { recordAudit, AUDIT_ACTIONS } = require("../middleware/audit");
 
 function sendJson(res, status, obj) {
   const body = JSON.stringify(obj || {});
@@ -77,6 +78,13 @@ async function handleAuthLogin(req, res, db) {
     return;
   }
   const token = issueJwtToken({ id: loginId, role: "admin", tenant_id: DEFAULT_TENANT });
+  recordAudit({
+    db,
+    action: AUDIT_ACTIONS.AUTH_LOGIN,
+    tenantId: DEFAULT_TENANT,
+    actorId: loginId,
+    meta: { route: "/api/auth/login" },
+  });
   sendJson(res, 200, { token });
 }
 

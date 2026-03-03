@@ -11,11 +11,12 @@ module.exports = Object.freeze({
 
   // Runs
   RUN_CREATE: "run_create",
+  RUN_START: "run_start",
   RUN_UPDATE: "run_update",
   RUN_DELETE: "run_delete",
 
   // Auth
-  AUTH_LOGIN: "auth_login",
+  AUTH_LOGIN: "auth.login",
   AUTH_LOGOUT: "auth_logout",
 
   // Artifacts

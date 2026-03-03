@@ -29,6 +29,11 @@ function recordAudit({
   meta = null,
 } = {}) {
   if (!action) return;
+  const allowedActions = new Set(Object.values(AUDIT_ACTIONS));
+  if (!allowedActions.has(action)) {
+    console.warn(`[AUDIT_WARN] unsupported action=${action}`);
+    return;
+  }
 
   const effectiveDb = isRealDb(db) ? db : isRealDb(hubDb) ? hubDb : null;
   if (!effectiveDb) return;
