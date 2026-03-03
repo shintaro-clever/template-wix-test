@@ -2,13 +2,11 @@
 <html class="dark" lang="ja">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
   <title>Orchestrator AI - アナリティクス</title>
-
   <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-
   <script id="tailwind-config">
     tailwind.config = {
       darkMode: "class",
@@ -20,90 +18,201 @@
             "background-dark": "#1d1615",
             "card-dark": "#251f1e",
             "border-dark": "#3d3432",
-            "text-muted": "#b1a7a5"
+            "text-muted": "#b1a7a5",
           },
           fontFamily: { "display": ["Inter", "sans-serif"] },
-          borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }
-        }
-      }
+          borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+        },
+      },
     }
   </script>
-
   <style>
-    body { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
+    body { font-family: 'Inter', "Noto Sans JP", sans-serif; }
     .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
     .active-nav { background-color: #a55c50; color: white; }
     .custom-scrollbar::-webkit-scrollbar { width: 4px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: #3d3432; border-radius: 9999px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #3d3432; border-radius: 10px; }
   </style>
 </head>
-<body class="bg-background-dark text-white min-h-screen">
-  <div class="min-h-screen flex">
-    <aside class="w-64 border-r border-border-dark p-4 hidden md:block">
-      <h1 class="text-xl font-semibold mb-6">Orchestrator AI</h1>
-      <nav class="space-y-2 text-sm">
-        <a class="block px-3 py-2 rounded-lg hover:bg-card-dark" href="/jobs">ジョブ</a>
-        <a class="block px-3 py-2 rounded-lg hover:bg-card-dark" href="/runs">実行履歴</a>
-        <a class="block px-3 py-2 rounded-lg active-nav" href="/ui/analytics.html">アナリティクス</a>
-        <a class="block px-3 py-2 rounded-lg hover:bg-card-dark" href="/projects">プロジェクト</a>
-      </nav>
-    </aside>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex overflow-hidden">
+  <aside class="w-64 flex-shrink-0 border-r border-border-dark bg-background-light dark:bg-background-dark flex flex-col h-screen">
+    <div class="p-6 flex items-center gap-3">
+      <div class="bg-primary rounded-lg p-1.5 flex items-center justify-center">
+        <span class="material-symbols-outlined text-white">account_tree</span>
+      </div>
+      <h1 class="text-lg font-bold tracking-tight text-slate-900 dark:text-slate-100">Orchestrator AI</h1>
+    </div>
+    <nav class="flex-1 px-4 py-2 space-y-1">
+      <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-text-muted hover:bg-primary/10 transition-colors" href="/ui/dashboard.html">
+        <span class="material-symbols-outlined">dashboard</span><span class="text-sm font-medium">ダッシュボード</span>
+      </a>
+      <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-text-muted hover:bg-primary/10 transition-colors" href="/ui/projects.html">
+        <span class="material-symbols-outlined">folder</span><span class="text-sm font-medium">プロジェクト</span>
+      </a>
+      <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 dark:text-text-muted hover:bg-primary/10 transition-colors" href="/ui/settings.html">
+        <span class="material-symbols-outlined">settings</span><span class="text-sm font-medium">設定</span>
+      </a>
+      <a class="flex items-center gap-3 px-3 py-2.5 rounded-lg active-nav" href="/ui/analytics.html">
+        <span class="material-symbols-outlined">query_stats</span><span class="text-sm font-medium">アナリティクス</span>
+      </a>
+    </nav>
+    <div class="p-4 border-t border-border-dark">
+      <button class="mt-1 flex items-center gap-2 w-full px-3 py-2 text-xs font-medium text-text-muted hover:text-primary transition-colors">
+        <span class="material-symbols-outlined text-sm">logout</span>ログアウト
+      </button>
+    </div>
+  </aside>
 
-    <main class="flex-1 p-6 md:p-10">
-      <header class="flex items-center justify-between mb-8">
-        <div>
-          <h2 class="text-2xl font-semibold">アナリティクス</h2>
-          <p class="text-text-muted mt-1">実行トレンドと成功率のモニタリング</p>
+  <main class="flex-1 flex flex-col h-screen overflow-hidden">
+    <header class="h-16 border-b border-border-dark px-8 flex items-center justify-between bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md z-10">
+      <h2 class="text-xl font-bold text-slate-900 dark:text-slate-100">アナリティクス</h2>
+      <div class="text-xs text-text-muted">Data source: <span class="font-mono">/api/runs</span></div>
+    </header>
+
+    <div class="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-6">
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-border-dark">
+          <div class="text-xs text-text-muted">総 runs</div>
+          <div id="kpi-total" class="text-2xl font-bold mt-1">-</div>
         </div>
-        <button class="bg-primary px-4 py-2 rounded-lg text-sm font-semibold">エクスポート</button>
-      </header>
-
-      <section class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        <article class="bg-card-dark border border-border-dark rounded-xl p-4">
-          <p class="text-text-muted text-sm">総実行数</p>
-          <p class="text-2xl font-semibold mt-2">1,284</p>
-        </article>
-        <article class="bg-card-dark border border-border-dark rounded-xl p-4">
-          <p class="text-text-muted text-sm">成功率</p>
-          <p class="text-2xl font-semibold mt-2">96.4%</p>
-        </article>
-        <article class="bg-card-dark border border-border-dark rounded-xl p-4">
-          <p class="text-text-muted text-sm">平均所要時間</p>
-          <p class="text-2xl font-semibold mt-2">2m 18s</p>
-        </article>
-        <article class="bg-card-dark border border-border-dark rounded-xl p-4">
-          <p class="text-text-muted text-sm">本日の失敗数</p>
-          <p class="text-2xl font-semibold mt-2">7</p>
-        </article>
+        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-border-dark">
+          <div class="text-xs text-text-muted">直近30日 runs</div>
+          <div id="kpi-30d" class="text-2xl font-bold mt-1">-</div>
+        </div>
+        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-border-dark">
+          <div class="text-xs text-text-muted">成功率（直近30日）</div>
+          <div id="kpi-success" class="text-2xl font-bold mt-1">-</div>
+        </div>
       </section>
 
-      <section class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <article class="xl:col-span-2 bg-card-dark border border-border-dark rounded-xl p-4">
-          <h3 class="font-semibold mb-4">日次実行トレンド</h3>
-          <div class="h-64 rounded-lg bg-[#1b1514] border border-border-dark flex items-end gap-2 p-3">
-            <div class="bg-primary/70 w-full rounded-t" style="height: 30%"></div>
-            <div class="bg-primary/70 w-full rounded-t" style="height: 45%"></div>
-            <div class="bg-primary/70 w-full rounded-t" style="height: 40%"></div>
-            <div class="bg-primary/70 w-full rounded-t" style="height: 60%"></div>
-            <div class="bg-primary/70 w-full rounded-t" style="height: 55%"></div>
-            <div class="bg-primary/70 w-full rounded-t" style="height: 78%"></div>
-            <div class="bg-primary/70 w-full rounded-t" style="height: 66%"></div>
+      <section class="bg-white dark:bg-card-dark p-6 rounded-xl border border-border-dark">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h3 class="text-sm font-bold">直近のruns</h3>
+            <p class="text-xs text-text-muted mt-1">/api/runs を最大50件表示（取得できない場合は空のまま）</p>
           </div>
-        </article>
+          <button id="btn-refresh" class="bg-primary hover:bg-primary/90 text-white rounded-lg px-4 py-2 text-xs font-bold flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">refresh</span>更新
+          </button>
+        </div>
 
-        <article class="bg-card-dark border border-border-dark rounded-xl p-4">
-          <h3 class="font-semibold mb-4">失敗理由トップ</h3>
-          <ul class="space-y-3 text-sm custom-scrollbar max-h-64 overflow-y-auto pr-2">
-            <li class="flex items-center justify-between"><span>service_unavailable</span><span class="text-text-muted">35%</span></li>
-            <li class="flex items-center justify-between"><span>validation_error</span><span class="text-text-muted">24%</span></li>
-            <li class="flex items-center justify-between"><span>permission</span><span class="text-text-muted">18%</span></li>
-            <li class="flex items-center justify-between"><span>run_failed</span><span class="text-text-muted">13%</span></li>
-            <li class="flex items-center justify-between"><span>rate_limit</span><span class="text-text-muted">10%</span></li>
-          </ul>
-        </article>
+        <div class="mt-4 overflow-x-auto">
+          <table class="min-w-full text-xs">
+            <thead>
+              <tr class="text-text-muted border-b border-border-dark">
+                <th class="py-2 text-left font-bold">run_id</th>
+                <th class="py-2 text-left font-bold">status</th>
+                <th class="py-2 text-left font-bold">job_type</th>
+                <th class="py-2 text-left font-bold">created_at</th>
+              </tr>
+            </thead>
+            <tbody id="runs-tbody" class="divide-y divide-border-dark"></tbody>
+          </table>
+        </div>
+
+        <div id="err" class="mt-4 hidden text-xs text-red-400"></div>
       </section>
-    </main>
-  </div>
+    </div>
+  </main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+
+  function getJwt() {
+    try { return localStorage.getItem('ih_jwt') || ''; } catch (_) { return ''; }
+  }
+
+  async function fetchJson(path) {
+    const headers = {};
+    const jwt = getJwt();
+    if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
+    const res = await fetch(path, { headers });
+    const text = await res.text();
+    let json = null;
+    try { json = text ? JSON.parse(text) : null; } catch (_) {}
+    if (!res.ok) {
+      const msg = (json && (json.message || json.error)) || text || `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return json;
+  }
+
+  function parseDate(v) {
+    const d = v ? new Date(v) : null;
+    return (d && !isNaN(d.getTime())) ? d : null;
+  }
+
+  function isSuccessStatus(s) {
+    return (s === 'succeeded' || s === 'success' || s === 'done');
+  }
+
+  function setText(id, v) { $(id).textContent = v; }
+
+  function renderRuns(items) {
+    const tbody = $('runs-tbody');
+    tbody.innerHTML = '';
+    for (const it of items) {
+      const tr = document.createElement('tr');
+      tr.className = 'text-slate-800 dark:text-slate-100';
+      const runId = (it.run_id || it.id || '').toString();
+      const status = (it.status || '').toString();
+      const jobType = (it.job_type || '').toString();
+      const createdAt = (it.created_at || it.createdAt || it.created || '').toString();
+
+      tr.innerHTML = `
+        <td class="py-2 font-mono">${escapeHtml(runId).slice(0, 16)}${runId.length>16?'…':''}</td>
+        <td class="py-2">${escapeHtml(status)}</td>
+        <td class="py-2">${escapeHtml(jobType)}</td>
+        <td class="py-2 font-mono">${escapeHtml(createdAt)}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  function escapeHtml(s) {
+    return (s || '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function computeKpis(items) {
+    const total = items.length;
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - 30*24*60*60*1000);
+    const items30 = items.filter(it => {
+      const d = parseDate(it.created_at || it.createdAt || it.created);
+      return d && d >= cutoff;
+    });
+
+    const succ30 = items30.filter(it => isSuccessStatus((it.status || '').toString())).length;
+    const rate = items30.length ? Math.round((succ30 / items30.length) * 100) : 0;
+
+    setText('kpi-total', total.toString());
+    setText('kpi-30d', items30.length.toString());
+    setText('kpi-success', items30.length ? `${rate}%` : '-');
+  }
+
+  async function load() {
+    $('err').classList.add('hidden');
+    try {
+      const runs = await fetchJson('/api/runs');
+      const items = Array.isArray(runs) ? runs : (runs && runs.items) ? runs.items : [];
+      const sliced = items.slice(0, 50);
+      computeKpis(items);
+      renderRuns(sliced);
+    } catch (e) {
+      $('err').classList.remove('hidden');
+      $('err').textContent = '読み込みに失敗: ' + e.message;
+      setText('kpi-total', '-');
+      setText('kpi-30d', '-');
+      setText('kpi-success', '-');
+      $('runs-tbody').innerHTML = '';
+    }
+  }
+
+  $('btn-refresh').addEventListener('click', load);
+  load();
+})();
+</script>
 </body>
 </html>
