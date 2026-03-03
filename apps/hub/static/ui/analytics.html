@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html class="dark" lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Orchestrator AI - アナリティクス</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = { darkMode:"class", theme:{ extend:{ colors:{
+      primary:"#a55c50","background-light":"#f7f6f6","background-dark":"#1d1615",
+      "card-dark":"#251f1e","border-dark":"#3d3432","text-muted":"#b1a7a5"
+    }, fontFamily:{display:["Inter","sans-serif"]}, borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem",full:"9999px"} } } };
+  </script>
+  <style>
+    body{font-family:'Inter',"Noto Sans JP",sans-serif;}
+    .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}
+    .custom-scrollbar::-webkit-scrollbar{width:4px;}
+    .custom-scrollbar::-webkit-scrollbar-thumb{background:#3d3432;border-radius:10px;}
+  </style>
+</head>
+<body data-page="analytics" class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex overflow-hidden">
+  <div id="sidebar-root"></div>
+
+  <main class="flex-1 flex flex-col h-screen overflow-hidden">
+    <header class="h-16 border-b border-border-dark px-8 flex items-center justify-between bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md z-10">
+      <h2 class="text-xl font-bold">アナリティクス</h2>
+      <div class="text-xs text-text-muted">source: /api/runs</div>
+    </header>
+
+    <div class="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-6">
+      <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-border-dark">
+          <div class="text-xs text-text-muted">総 runs</div><div id="kpi-total" class="text-2xl font-bold mt-1">-</div>
+        </div>
+        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-border-dark">
+          <div class="text-xs text-text-muted">直近30日 runs</div><div id="kpi-30d" class="text-2xl font-bold mt-1">-</div>
+        </div>
+        <div class="bg-white dark:bg-card-dark p-5 rounded-xl border border-border-dark">
+          <div class="text-xs text-text-muted">成功率（直近30日）</div><div id="kpi-success" class="text-2xl font-bold mt-1">-</div>
+        </div>
+      </section>
+
+      <section class="bg-white dark:bg-card-dark p-6 rounded-xl border border-border-dark">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <h3 class="text-sm font-bold">直近のruns</h3>
+            <p class="text-xs text-text-muted mt-1">最大50件表示（取得できない場合はエラー表示）</p>
+          </div>
+          <button id="btn-refresh" class="bg-primary hover:bg-primary/90 text-white rounded-lg px-4 py-2 text-xs font-bold flex items-center gap-2">
+            <span class="material-symbols-outlined text-sm">refresh</span>更新
+          </button>
+        </div>
+
+        <div class="mt-4 overflow-x-auto">
+          <table class="min-w-full text-xs">
+            <thead>
+              <tr class="text-text-muted border-b border-border-dark">
+                <th class="py-2 text-left font-bold">run_id</th>
+                <th class="py-2 text-left font-bold">status</th>
+                <th class="py-2 text-left font-bold">job_type</th>
+                <th class="py-2 text-left font-bold">created_at</th>
+              </tr>
+            </thead>
+            <tbody id="runs-tbody" class="divide-y divide-border-dark"></tbody>
+          </table>
+        </div>
+
+        <div id="err" class="mt-4 hidden text-xs text-red-400"></div>
+      </section>
+    </div>
+  </main>
+
+<script src="/ui/sidebar.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const getJwt = () => { try { return localStorage.getItem('ih_jwt') || ''; } catch(_) { return ''; } };
+  const fetchJson = async (path) => {
+    const headers = {};
+    const jwt = getJwt();
+    if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
+    const res = await fetch(path, { headers });
+    const text = await res.text();
+    let json = null; try { json = text ? JSON.parse(text) : null; } catch(_){}
+    if (!res.ok) throw new Error((json && (json.message || json.error)) || text || `HTTP ${res.status}`);
+    return json;
+  };
+  const parseDate = (v) => { const d = v ? new Date(v) : null; return (d && !isNaN(d.getTime())) ? d : null; };
+  const isSuccess = (s) => (s==='succeeded'||s==='success'||s==='done');
+  const esc = (s) => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const render = (items) => {
+    const tb = $('runs-tbody'); tb.innerHTML = '';
+    for (const it of items) {
+      const runId = (it.run_id || it.id || '').toString();
+      const status = (it.status || '').toString();
+      const jobType = (it.job_type || '').toString();
+      const createdAt = (it.created_at || it.createdAt || it.created || '').toString();
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td class="py-2 font-mono">${esc(runId).slice(0,16)}${runId.length>16?'…':''}</td>
+                      <td class="py-2">${esc(status)}</td>
+                      <td class="py-2">${esc(jobType)}</td>
+                      <td class="py-2 font-mono">${esc(createdAt)}</td>`;
+      tb.appendChild(tr);
+    }
+  };
+  const kpi = (items) => {
+    const total = items.length;
+    const cutoff = new Date(Date.now() - 30*24*60*60*1000);
+    const items30 = items.filter(it => { const d = parseDate(it.created_at||it.createdAt||it.created); return d && d >= cutoff; });
+    const succ30 = items30.filter(it => isSuccess((it.status||'').toString())).length;
+    const rate = items30.length ? Math.round((succ30/items30.length)*100) : 0;
+    $('kpi-total').textContent = total.toString();
+    $('kpi-30d').textContent = items30.length.toString();
+    $('kpi-success').textContent = items30.length ? `${rate}%` : '-';
+  };
+  const load = async () => {
+    $('err').classList.add('hidden');
+    try {
+      const runs = await fetchJson('/api/runs');
+      const items = Array.isArray(runs) ? runs : (runs && runs.items) ? runs.items : [];
+      kpi(items);
+      render(items.slice(0,50));
+    } catch(e) {
+      $('err').classList.remove('hidden');
+      $('err').textContent = '読み込みに失敗: ' + e.message;
+      $('kpi-total').textContent = $('kpi-30d').textContent = $('kpi-success').textContent = '-';
+      $('runs-tbody').innerHTML = '';
+    }
+  };
+  $('btn-refresh').addEventListener('click', load);
+  load();
+})();
+</script>
+</body></html>
