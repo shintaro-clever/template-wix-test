@@ -19,6 +19,10 @@ function isValidSecretKey(value) {
 function validateEnv(env = process.env) {
   const mode = parseAuthMode(env.AUTH_MODE);
   if (mode === "off") {
+    const nodeEnv = String(env.NODE_ENV || "").trim().toLowerCase();
+    if (nodeEnv === "production") {
+      throw new Error('AUTH_MODE=off is not allowed when NODE_ENV=production');
+    }
     return { authMode: mode };
   }
   if (!isValidJwtSecret(env.JWT_SECRET || "")) {

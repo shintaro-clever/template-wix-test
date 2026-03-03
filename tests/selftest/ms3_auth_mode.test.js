@@ -15,6 +15,7 @@ async function run() {
     AUTH_MODE: process.env.AUTH_MODE,
     JWT_SECRET: process.env.JWT_SECRET,
     SECRET_KEY: process.env.SECRET_KEY,
+    NODE_ENV: process.env.NODE_ENV,
   };
 
   try {
@@ -58,8 +59,20 @@ async function run() {
       secretRejected = /SECRET_KEY/.test(String(error && error.message));
     }
     assert(secretRejected, "createApiServer should reject invalid SECRET_KEY when AUTH_MODE=on");
+
+    process.env.AUTH_MODE = "off";
+    process.env.NODE_ENV = "production";
+    let prodOffRejected = false;
+    try {
+      createApiServer();
+    } catch (error) {
+      prodOffRejected = /AUTH_MODE=off/.test(String(error && error.message));
+    }
+    assert(prodOffRejected, "createApiServer should reject AUTH_MODE=off in production");
   } finally {
     restoreEnv(snapshot);
+    if (snapshot.NODE_ENV === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = snapshot.NODE_ENV;
   }
 }
 
