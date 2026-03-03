@@ -1,6 +1,7 @@
 // src/middleware/auth.js
-const jwt = require("jsonwebtoken");
 const { buildErrorBody } = require("../server/errors");
+const { parseAuthMode } = require("../auth/config");
+const { verifyJwtToken } = require("../auth/jwt");
 
 function unauthorized(res) {
   if (res && typeof res.writeHead === "function") {
@@ -19,6 +20,11 @@ function unauthorized(res) {
 }
 
 function requireAuth(req, res) {
+  if (parseAuthMode(process.env.AUTH_MODE) === "off") {
+    req.user = { id: "dev-auth-bypass", role: "admin", tenant_id: "default" };
+    return true;
+  }
+
   const header = req?.headers?.authorization || req?.headers?.Authorization || "";
   const m = String(header).match(/^Bearer\s+(.+)$/i);
   const token = m ? m[1] : "";
@@ -29,8 +35,7 @@ function requireAuth(req, res) {
   }
 
   try {
-    const secret = process.env.JWT_SECRET;
-    const payload = jwt.verify(token, secret, { algorithms: ["HS256"] });
+    const payload = verifyJwtToken(token, process.env);
     req.user = payload;
     return true;
   } catch {

@@ -1,7 +1,7 @@
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const { withRetry } = require("../db/retry");
 const { buildErrorBody } = require("../server/errors");
+const { issueJwtToken } = require("../auth/jwt");
 
 function sendJson(res, status, obj) {
   const body = JSON.stringify(obj || {});
@@ -33,14 +33,6 @@ function readJsonBody(req) {
     });
     req.on("error", reject);
   });
-}
-
-function getJwtSecret(env = process.env) {
-  const secret = env.JWT_SECRET || "";
-  if (typeof secret !== "string" || secret.length < 32) {
-    throw new Error("JWT_SECRET is invalid");
-  }
-  return secret;
 }
 
 async function handleAuthLogin(req, res, db) {
@@ -102,12 +94,7 @@ async function handleAuthLogin(req, res, db) {
     );
     return;
   }
-  const secret = getJwtSecret();
-  const token = jwt.sign(
-    { id: row.id, role: row.role, tenant_id: row.tenant_id },
-    secret,
-    { algorithm: "HS256", expiresIn: "1h" }
-  );
+  const token = issueJwtToken({ id: row.id, role: row.role, tenant_id: row.tenant_id });
   sendJson(res, 200, { token });
 }
 

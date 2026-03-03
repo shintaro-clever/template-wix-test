@@ -26,6 +26,7 @@ const { handleFigmaIngest } = require("./routes/ingest");
 const { handleJobsFromFigma } = require("./routes/jobs");
 const { handleGithubPrCreate } = require("./routes/github");
 const { requireAuth } = require("../middleware/auth");
+const { validateEnv } = require("../auth/config");
 const { logRequest } = require("../middleware/requestLog");
 const { executeLocalRun } = require("../runner/localRunner");
 
@@ -533,6 +534,8 @@ function createInlineRunner(db) {
 }
 
 function createApiServer(dbConn) {
+  validateEnv(process.env);
+
   const db =
     dbConn && dbConn.constructor && dbConn.constructor.name === "Database"
       ? dbConn
@@ -556,13 +559,9 @@ function createApiServer(dbConn) {
 
     try {
       if (urlPath.startsWith("/api/") && !urlPath.startsWith("/api/auth/")) {
-        const isPublicProjectsList =
-          (method === "GET" || method === "HEAD") && urlPath === "/api/projects";
-        if (!isPublicProjectsList) {
-          const ok = requireAuth(req, res);
-          if (!ok) {
-            return;
-          }
+        const ok = requireAuth(req, res);
+        if (!ok) {
+          return;
         }
       }
 

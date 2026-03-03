@@ -8,7 +8,9 @@ const { assert, requestLocal } = require("./_helpers");
 
 async function run() {
   const prevJwt = process.env.JWT_SECRET;
+  const prevSecretKey = process.env.SECRET_KEY;
   process.env.JWT_SECRET = "x".repeat(32);
+  process.env.SECRET_KEY = "1".repeat(64);
   try {
     const server = createApiServer();
     const handler = server.listeners("request")[0];
@@ -81,6 +83,8 @@ async function run() {
   } finally {
     if (prevJwt === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = prevJwt;
+    if (prevSecretKey === undefined) delete process.env.SECRET_KEY;
+    else process.env.SECRET_KEY = prevSecretKey;
   }
 }
 

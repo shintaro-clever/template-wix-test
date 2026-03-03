@@ -8,9 +8,11 @@ const { assert, requestLocal } = require("./_helpers");
 
 async function run() {
   const prevJwt = process.env.JWT_SECRET;
+  const prevSecretKey = process.env.SECRET_KEY;
   const prevRunnerMode = process.env.RUNNER_MODE;
   const prevFigmaMock = process.env.FIGMA_API_MOCK;
   process.env.JWT_SECRET = "x".repeat(32);
+  process.env.SECRET_KEY = "1".repeat(64);
   process.env.RUNNER_MODE = "inline";
   process.env.FIGMA_API_MOCK = "1";
 
@@ -94,6 +96,8 @@ async function run() {
   } finally {
     if (prevJwt === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = prevJwt;
+    if (prevSecretKey === undefined) delete process.env.SECRET_KEY;
+    else process.env.SECRET_KEY = prevSecretKey;
     if (prevRunnerMode === undefined) delete process.env.RUNNER_MODE;
     else process.env.RUNNER_MODE = prevRunnerMode;
     if (prevFigmaMock === undefined) delete process.env.FIGMA_API_MOCK;

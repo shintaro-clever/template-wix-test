@@ -61,9 +61,9 @@ async function run() {
 
   // Auth baseline
   const unauth = await requestLocal(handler, { method: "GET", url: "/api/projects" });
-  assert(unauth.statusCode === 200, "GET /api/projects should be public");
-  const publicProjects = JSON.parse(unauth.body.toString("utf8"));
-  assert(Array.isArray(publicProjects), "public projects response should be array");
+  assert(unauth.statusCode === 401, "GET /api/projects should require auth when AUTH_MODE=on");
+  const unauthProjectsBody = JSON.parse(unauth.body.toString("utf8"));
+  assert(typeof unauthProjectsBody.message === "string", "project unauth response should include message");
 
   const unauthConnectors = await requestLocal(handler, { method: "GET", url: "/api/connectors" });
   assert(unauthConnectors.statusCode === 401, "unauthenticated connectors should return 401");
