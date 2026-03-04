@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html class="dark" lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Orchestrator AI - 設定 / プロフィール</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#a55c50",
+              "background-light": "#f7f6f6",
+              "background-dark": "#1d1615",
+              "border-dark": "#3d3432",
+              "text-muted": "#b1a7a5",
+              "card-dark": "#251f1e"
+            },
+            fontFamily: { display: ["Inter", "sans-serif"] },
+            borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px" }
+          }
+        }
+      };
+    </script>
+
+    <style>
+      body { font-family: "Inter", "Noto Sans JP", sans-serif; }
+      .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(165, 92, 80, 0.2); border-radius: 10px; }
+    </style>
+  </head>
+
+  <body data-page="settings" class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display flex h-screen overflow-hidden">
+    <!--#include virtual="partials/sidebar.html" -->
+    <!-- include: partials/sidebar.html -->
+
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <!--#include virtual="partials/header.html" -->
+      <!-- include: partials/header.html (replace {{PAGE_TITLE}} -> 設定, {{HEADER_RIGHT_CONTENT}} -> <div class="text-xs text-text-muted">Profile</div>) -->
+
+      <div class="bg-background-light dark:bg-background-dark px-8 pt-6 border-b border-primary/10">
+        <nav class="flex flex-wrap gap-6">
+          <a class="pb-4 text-sm font-semibold text-primary border-b-2 border-primary" href="/ui/settings.html">プロフィール</a>
+          <a class="pb-4 text-sm font-semibold text-slate-500 hover:text-primary border-b-2 border-transparent" href="/ui/settings-connections.html">連携ツール</a>
+          <a class="pb-4 text-sm font-semibold text-slate-500 hover:text-primary border-b-2 border-transparent" href="/ui/settings-connections.html">接続管理 (Connections)</a>
+          <a class="pb-4 text-sm font-semibold text-slate-500 hover:text-primary border-b-2 border-transparent" href="/ui/settings-drive.html">Drive出力先</a>
+          <a class="pb-4 text-sm font-semibold text-slate-500 hover:text-primary border-b-2 border-transparent" href="/ui/settings-appearance.html">外観</a>
+          <a class="pb-4 text-sm font-semibold text-slate-500 hover:text-primary border-b-2 border-transparent" href="/ui/settings-language.html">言語</a>
+        </nav>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-scrollbar bg-background-light dark:bg-background-dark p-8">
+        <div class="max-w-5xl space-y-8 pb-12">
+          <section class="bg-white dark:bg-card-dark border border-primary/10 rounded-xl p-6">
+            <h3 class="text-lg font-bold mb-1">プロフィール</h3>
+            <p class="text-sm text-slate-500 mb-5">ユーザー表示情報（MVP: 表示のみ）</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="p-4 rounded-lg border border-primary/10">
+                <p class="text-xs text-slate-500">表示名</p>
+                <p class="font-semibold mt-1">田中 健一</p>
+              </div>
+              <div class="p-4 rounded-lg border border-primary/10">
+                <p class="text-xs text-slate-500">メールアドレス</p>
+                <p class="font-semibold mt-1">kenichi.tanaka@example.com</p>
+              </div>
+              <div class="p-4 rounded-lg border border-primary/10">
+                <p class="text-xs text-slate-500">プラン</p>
+                <p class="font-semibold mt-1">Pro Plan</p>
+              </div>
+              <div class="p-4 rounded-lg border border-primary/10">
+                <p class="text-xs text-slate-500">タイムゾーン</p>
+                <p class="font-semibold mt-1">Asia/Tokyo</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="bg-white dark:bg-card-dark border border-primary/10 rounded-xl p-6">
+            <h3 class="text-lg font-bold mb-2">設定タブ一覧</h3>
+            <p class="text-sm text-slate-500 mb-4">マニュアル準拠の必要項目へ移動できます。</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <a class="p-4 rounded-lg border border-primary/10 hover:border-primary/40 transition" href="/ui/settings-connections.html">連携ツール / 接続管理 (Connections)</a>
+              <a class="p-4 rounded-lg border border-primary/10 hover:border-primary/40 transition" href="/ui/settings-drive.html">Drive出力先</a>
+              <a class="p-4 rounded-lg border border-primary/10 hover:border-primary/40 transition" href="/ui/settings-appearance.html">外観</a>
+              <a class="p-4 rounded-lg border border-primary/10 hover:border-primary/40 transition" href="/ui/settings-language.html">言語</a>
+            </div>
+          </section>
+
+          <section class="bg-white dark:bg-card-dark border border-amber-500/40 rounded-xl p-6">
+            <h3 class="text-lg font-bold">運用上の注意</h3>
+            <ul class="mt-3 text-sm text-slate-600 dark:text-slate-300 space-y-2">
+              <li>・明示フォルダのみ出力</li>
+              <li>・共有接続優先</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <script src="/ui/sidebar.js"></script>
+  </body>
+</html>
