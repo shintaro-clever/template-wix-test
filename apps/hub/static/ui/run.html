@@ -105,13 +105,173 @@
 
       <div class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8">
         <section class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-6">
-          <h1 class="text-xl font-bold" data-i18n="ui.run.h1">run</h1>
-          <p class="mt-2 text-sm text-text-muted" data-i18n="ui.run.stub">This page is a UI stub.</p>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 class="text-xl font-bold" data-i18n="ui.run.h1">実行詳細</h1>
+              <p class="mt-2 text-sm text-text-muted" data-i18n="ui.run.desc">選択したRunの入力・出力・ログを確認します。</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="run-status-badge" class="inline-flex px-2 py-1 rounded-full text-xs bg-slate-500/15 text-slate-400">-</span>
+            </div>
+          </div>
+
+          <div class="mt-4 flex flex-wrap gap-2">
+            <a href="/ui/runs.html" class="px-3 py-2 rounded-lg border border-border-dark text-sm hover:bg-slate-100 dark:hover:bg-background-dark/80" data-i18n="ui.run.back">
+              戻る
+            </a>
+            <button type="button" class="px-3 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90" data-i18n="ui.run.rerun">
+              再実行
+            </button>
+          </div>
+
+          <div id="run-feedback" class="mt-4 text-sm text-text-muted" data-i18n="common.loading">読み込み中</div>
+          <button id="run-retry" class="mt-2 px-3 py-2 rounded-lg border border-border-dark text-sm hover:bg-slate-100 dark:hover:bg-background-dark/80 hidden" type="button" data-i18n="common.retry">
+            再試行
+          </button>
+
+          <div class="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <section class="rounded-lg border border-border-dark p-4">
+              <h2 class="text-sm font-semibold" data-i18n="ui.run.section.overview">Overview</h2>
+              <dl class="mt-3 grid grid-cols-[120px_1fr] gap-y-2 text-sm">
+                <dt class="text-text-muted" data-i18n="ui.run.field.runId">runId</dt><dd id="run-run-id" class="font-mono text-xs">-</dd>
+                <dt class="text-text-muted" data-i18n="ui.run.field.jobType">jobType</dt><dd id="run-job-type">-</dd>
+                <dt class="text-text-muted" data-i18n="ui.run.field.status">status</dt><dd id="run-status">-</dd>
+                <dt class="text-text-muted" data-i18n="ui.run.field.createdAt">created_at</dt><dd id="run-created-at">-</dd>
+                <dt class="text-text-muted" data-i18n="ui.run.field.figmaFileKey">figma_file_key</dt><dd id="run-figma-file-key">-</dd>
+                <dt class="text-text-muted" data-i18n="ui.run.field.githubPrUrl">github_pr_url</dt><dd id="run-github-pr-url">-</dd>
+              </dl>
+            </section>
+            <section class="rounded-lg border border-border-dark p-4">
+              <h2 class="text-sm font-semibold" data-i18n="ui.run.section.artifacts">Artifacts</h2>
+              <ul id="run-artifacts" class="mt-3 text-sm list-disc list-inside space-y-1"></ul>
+            </section>
+            <section class="rounded-lg border border-border-dark p-4">
+              <h2 class="text-sm font-semibold" data-i18n="ui.run.section.inputs">Inputs</h2>
+              <dl class="mt-3 grid grid-cols-[120px_1fr] gap-y-2 text-sm">
+                <dt class="text-text-muted" data-i18n="ui.run.field.target">target</dt><dd data-i18n="common.notAvailable">利用不可</dd>
+                <dt class="text-text-muted" data-i18n="ui.run.field.tenant">tenant</dt><dd data-i18n="common.notAvailable">利用不可</dd>
+                <dt class="text-text-muted" data-i18n="ui.run.field.project">project</dt><dd data-i18n="common.notAvailable">利用不可</dd>
+              </dl>
+            </section>
+            <section class="rounded-lg border border-border-dark p-4">
+              <h2 class="text-sm font-semibold" data-i18n="ui.run.section.outputs">Outputs</h2>
+              <dl class="mt-3 grid grid-cols-[120px_1fr] gap-y-2 text-sm">
+                <dt class="text-text-muted" data-i18n="ui.run.field.result">result</dt><dd data-i18n="common.notAvailable">利用不可</dd>
+                <dt class="text-text-muted" data-i18n="ui.run.field.artifact">artifact</dt><dd data-i18n="common.notAvailable">利用不可</dd>
+                <dt class="text-text-muted" data-i18n="ui.run.field.failureCode">failureCode</dt><dd data-i18n="common.notAvailable">利用不可</dd>
+              </dl>
+            </section>
+            <section class="rounded-lg border border-border-dark p-4">
+              <h2 class="text-sm font-semibold" data-i18n="ui.run.section.logs">Logs</h2>
+              <pre class="mt-3 bg-background-dark text-slate-100 rounded-lg p-3 text-xs overflow-x-auto" data-i18n="common.notAvailable">利用不可</pre>
+            </section>
+          </div>
         </section>
       </div>
     </main>
 
     <script src="/ui/sidebar.js"></script>
     <script src="/ui/i18n/i18n.js" defer></script>
+    <script type="module">
+      import { apiGet, setText, t } from "/ui/api.js";
+
+      const params = new URLSearchParams(window.location.search || "");
+      const runId = (params.get("run_id") || "").trim();
+
+      const feedback = document.getElementById("run-feedback");
+      const retry = document.getElementById("run-retry");
+      const statusBadge = document.getElementById("run-status-badge");
+      const artifactsRoot = document.getElementById("run-artifacts");
+
+      function setStatusVisual(status) {
+        if (!statusBadge) return;
+        const value = String(status || "-");
+        statusBadge.textContent = value;
+        statusBadge.classList.remove("bg-emerald-500/15", "text-emerald-500", "bg-amber-500/15", "text-amber-500", "bg-rose-500/15", "text-rose-500", "bg-slate-500/15", "text-slate-400");
+        if (value === "ok" || value === "completed") {
+          statusBadge.classList.add("bg-emerald-500/15", "text-emerald-500");
+        } else if (value === "running" || value === "pending") {
+          statusBadge.classList.add("bg-amber-500/15", "text-amber-500");
+        } else if (value === "-") {
+          statusBadge.classList.add("bg-slate-500/15", "text-slate-400");
+        } else {
+          statusBadge.classList.add("bg-rose-500/15", "text-rose-500");
+        }
+      }
+
+      function setValue(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = value || "-";
+      }
+
+      function renderArtifacts(items) {
+        if (!artifactsRoot) return;
+        artifactsRoot.innerHTML = "";
+        if (!Array.isArray(items) || items.length === 0) {
+          const li = document.createElement("li");
+          li.setAttribute("data-i18n", "common.notAvailable");
+          li.textContent = "利用不可";
+          artifactsRoot.appendChild(li);
+          return;
+        }
+        items.forEach((item) => {
+          const li = document.createElement("li");
+          const text = String(item || "");
+          if (!text) return;
+          li.className = "font-mono text-xs break-all";
+          li.textContent = text;
+          artifactsRoot.appendChild(li);
+        });
+      }
+
+      function renderRun(run) {
+        setStatusVisual(run.status);
+        setValue("run-run-id", String(run.run_id || "-"));
+        setValue("run-job-type", String(run.job_type || "-"));
+        setValue("run-status", String(run.status || "-"));
+        setValue("run-created-at", String(run.created_at || "-"));
+        setValue("run-figma-file-key", String(run.figma_file_key || "-"));
+        setValue("run-github-pr-url", String(run.github_pr_url || "-"));
+        renderArtifacts(run.artifacts);
+      }
+
+      async function loadRun() {
+        retry.classList.add("hidden");
+        await setText(feedback, "common.loading", true);
+        setStatusVisual("-");
+
+        if (!runId) {
+          const msg = await t("ui.run.missingId");
+          const err = await t("common.error");
+          feedback.textContent = `${err}: ${msg}`;
+          retry.classList.remove("hidden");
+          return;
+        }
+
+        try {
+          const payload = await apiGet("/runs");
+          const runs = Array.isArray(payload && payload.runs) ? payload.runs : [];
+          const run = runs.find((item) => String(item && item.run_id) === runId);
+          if (!run) {
+            const msg = await t("ui.run.notFound");
+            const err = await t("common.error");
+            feedback.textContent = `${err}: ${msg}`;
+            retry.classList.remove("hidden");
+            renderArtifacts([]);
+            return;
+          }
+          renderRun(run);
+          feedback.textContent = "";
+        } catch (error) {
+          const msg = await t("common.error");
+          feedback.textContent = `${msg}: ${error && error.message ? error.message : "unknown"}`;
+          retry.classList.remove("hidden");
+        }
+      }
+
+      retry.addEventListener("click", loadRun);
+      loadRun();
+    </script>
   </body>
 </html>

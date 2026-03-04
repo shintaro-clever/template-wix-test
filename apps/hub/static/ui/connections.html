@@ -105,13 +105,141 @@
 
       <div class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8">
         <section class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-6">
-          <h1 class="text-xl font-bold" data-i18n="ui.connections.h1">connections</h1>
-          <p class="mt-2 text-sm text-text-muted" data-i18n="ui.connections.stub">This page is a UI stub.</p>
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 class="text-xl font-bold" data-i18n="ui.connections.h1">接続一覧</h1>
+              <p class="mt-2 text-sm text-text-muted" data-i18n="ui.connections.desc">Providerごとの接続状態を確認します。</p>
+            </div>
+            <button type="button" class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors" data-i18n="ui.connections.add">
+              接続を追加
+            </button>
+          </div>
+
+          <div class="mt-6 overflow-x-auto rounded-lg border border-border-dark">
+            <table class="min-w-full text-sm">
+              <thead class="bg-slate-100 dark:bg-background-dark/70">
+                <tr class="text-left text-slate-600 dark:text-slate-300">
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.connections.col.key">key</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.connections.col.connected">connected</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.connections.col.status">Status</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.connections.col.account">Account</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.connections.col.updated">Updated</th>
+                </tr>
+              </thead>
+              <tbody id="connections-table-body"></tbody>
+            </table>
+          </div>
+
+          <div id="connections-feedback" class="mt-4 text-sm text-text-muted" data-i18n="common.loading">読み込み中</div>
+          <button id="connections-retry" class="mt-2 px-3 py-2 rounded-lg border border-border-dark text-sm hover:bg-slate-100 dark:hover:bg-background-dark/80 hidden" type="button" data-i18n="common.retry">
+            再試行
+          </button>
+
+          <div id="connections-empty-state" class="mt-6 rounded-lg border border-dashed border-border-dark p-6 text-center hidden">
+            <p class="text-sm font-semibold" data-i18n="ui.connections.empty.title">接続がまだありません</p>
+            <p class="mt-1 text-xs text-text-muted" data-i18n="ui.connections.empty.desc">接続を追加するとここに表示されます。</p>
+          </div>
         </section>
       </div>
     </main>
 
     <script src="/ui/sidebar.js"></script>
     <script src="/ui/i18n/i18n.js" defer></script>
+    <script type="module">
+      import { apiGet, setText, t } from "/ui/api.js";
+
+      const tbody = document.getElementById("connections-table-body");
+      const feedback = document.getElementById("connections-feedback");
+      const retry = document.getElementById("connections-retry");
+      const empty = document.getElementById("connections-empty-state");
+
+      function clearRows() {
+        if (tbody) tbody.innerHTML = "";
+      }
+
+      function toggleEmpty(show) {
+        if (!empty) return;
+        empty.classList.toggle("hidden", !show);
+      }
+
+      function buildStatusBadge(connected) {
+        const badge = document.createElement("span");
+        badge.className = "inline-flex px-2 py-1 rounded-full text-xs";
+        if (connected) {
+          badge.classList.add("bg-emerald-500/15", "text-emerald-500");
+          badge.textContent = "connected";
+        } else {
+          badge.classList.add("bg-rose-500/15", "text-rose-500");
+          badge.textContent = "disconnected";
+        }
+        return badge;
+      }
+
+      function appendRow(item, updatedAt) {
+        if (!tbody) return;
+        const tr = document.createElement("tr");
+        tr.className = "border-t border-border-dark";
+
+        const key = String(item && item.key ? item.key : "-");
+        const connected = Boolean(item && item.connected);
+        const account = item && (item.account || item.name) ? String(item.account || item.name) : "-";
+        const updated = String(updatedAt || "-");
+
+        const tdKey = document.createElement("td");
+        tdKey.className = "px-4 py-3";
+        const a = document.createElement("a");
+        a.href = `/ui/connection.html?key=${encodeURIComponent(key)}`;
+        a.className = "text-primary hover:underline";
+        a.textContent = key;
+        tdKey.appendChild(a);
+
+        const tdConnected = document.createElement("td");
+        tdConnected.className = "px-4 py-3";
+        tdConnected.textContent = connected ? "true" : "false";
+
+        const tdStatus = document.createElement("td");
+        tdStatus.className = "px-4 py-3";
+        tdStatus.appendChild(buildStatusBadge(connected));
+
+        const tdAccount = document.createElement("td");
+        tdAccount.className = "px-4 py-3";
+        tdAccount.textContent = account;
+
+        const tdUpdated = document.createElement("td");
+        tdUpdated.className = "px-4 py-3";
+        tdUpdated.textContent = updated;
+
+        tr.append(tdKey, tdConnected, tdStatus, tdAccount, tdUpdated);
+        tbody.appendChild(tr);
+      }
+
+      async function loadConnections() {
+        clearRows();
+        toggleEmpty(false);
+        retry.classList.add("hidden");
+        await setText(feedback, "common.loading", true);
+
+        try {
+          const payload = await apiGet("/connections");
+          const items = Array.isArray(payload && payload.items) ? payload.items : [];
+          const updatedAt = payload && payload.updated_at ? String(payload.updated_at) : "-";
+          if (items.length === 0) {
+            feedback.textContent = "";
+            toggleEmpty(true);
+            return;
+          }
+          items.forEach((item) => appendRow(item, updatedAt));
+          feedback.textContent = "";
+        } catch (error) {
+          const msg = await t("common.error");
+          feedback.textContent = `${msg}: ${error && error.message ? error.message : "unknown"}`;
+          retry.classList.remove("hidden");
+          toggleEmpty(false);
+        }
+      }
+
+      retry.addEventListener("click", loadConnections);
+      loadConnections();
+    </script>
   </body>
 </html>
