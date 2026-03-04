@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html class="dark" lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Orchestrator AI - 設定 / Drive出力先</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#a55c50",
+              "background-light": "#f7f6f6",
+              "background-dark": "#1d1615",
+              "border-dark": "#3d3432",
+              "text-muted": "#b1a7a5",
+              "card-dark": "#251f1e"
+            },
+            fontFamily: { display: ["Inter", "sans-serif"] },
+            borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px" }
+          }
+        }
+      };
+    </script>
+
+    <style>
+      body { font-family: "Inter", "Noto Sans JP", sans-serif; }
+      .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(165, 92, 80, 0.2); border-radius: 10px; }
+    </style>
+  </head>
+
+  <body data-page="settings" class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display flex h-screen overflow-hidden">
+    <!--#include virtual="partials/sidebar.html" -->
+    <!-- include: partials/sidebar.html -->
+
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <!--#include virtual="partials/header.html" -->
+      <!-- include: partials/header.html (replace {{PAGE_TITLE}} -> 設定, {{HEADER_RIGHT_CONTENT}} -> <div class="text-xs text-text-muted">Drive Output</div>) -->
+
+      <div class="bg-background-light dark:bg-background-dark px-8 pt-6 border-b border-primary/10">
+        <nav class="flex flex-wrap gap-6">
+          <a class="pb-4 text-sm font-semibold text-slate-500 hover:text-primary border-b-2 border-transparent" href="/ui/settings.html">プロフィール</a>
+          <a class="pb-4 text-sm font-semibold text-slate-500 hover:text-primary border-b-2 border-transparent" href="/ui/settings-connections.html">連携ツール</a>
+          <a class="pb-4 text-sm font-semibold text-slate-500 hover:text-primary border-b-2 border-transparent" href="/ui/settings-connections.html">接続管理 (Connections)</a>
+          <a class="pb-4 text-sm font-semibold text-primary border-b-2 border-primary" href="/ui/settings-drive.html">Drive出力先</a>
+          <a class="pb-4 text-sm font-semibold text-slate-500 hover:text-primary border-b-2 border-transparent" href="/ui/settings-appearance.html">外観</a>
+          <a class="pb-4 text-sm font-semibold text-slate-500 hover:text-primary border-b-2 border-transparent" href="/ui/settings-language.html">言語</a>
+        </nav>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-scrollbar bg-background-light dark:bg-background-dark p-8">
+        <div class="max-w-5xl space-y-6 pb-12">
+          <section class="bg-white dark:bg-card-dark border border-primary/10 rounded-xl p-6">
+            <h3 class="text-lg font-bold">Drive出力先</h3>
+            <p class="text-sm text-slate-500 mt-1">成果物のエクスポート先フォルダを管理します（MVP: 表示のみ）。</p>
+
+            <div class="mt-4 rounded-lg border border-amber-500/40 bg-amber-50/60 dark:bg-amber-500/10 p-4 text-sm space-y-1">
+              <p>・ユーザーが明示したフォルダのみ出力</p>
+              <p>・毎回新規作成</p>
+              <p>・権限不足時は失敗しfailure_codeで判別</p>
+              <p>・共有接続優先</p>
+            </div>
+
+            <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="border border-primary/10 rounded-lg p-4 md:col-span-2">
+                <p class="text-xs text-slate-500">出力先フォルダ ID（MVP: readonly風）</p>
+                <input class="mt-2 w-full rounded-lg border border-primary/20 bg-slate-100/70 dark:bg-slate-900/40 px-3 py-2 text-sm text-slate-700 dark:text-slate-200" type="text" value="1A2B3C4D5E6F7G8H9I0J" readonly />
+              </div>
+              <div class="border border-primary/10 rounded-lg p-4 md:col-span-2">
+                <p class="text-xs text-slate-500">出力先フォルダ URL（MVP: readonly風）</p>
+                <input class="mt-2 w-full rounded-lg border border-primary/20 bg-slate-100/70 dark:bg-slate-900/40 px-3 py-2 text-sm text-slate-700 dark:text-slate-200" type="text" value="https://drive.google.com/drive/folders/1A2B3C4D5E6F7G8H9I0J" readonly />
+              </div>
+              <div class="border border-primary/10 rounded-lg p-4">
+                <p class="text-xs text-slate-500">接続元</p>
+                <p class="font-semibold mt-1">Google Drive (共有接続)</p>
+              </div>
+              <div class="border border-primary/10 rounded-lg p-4">
+                <p class="text-xs text-slate-500">ルートフォルダ</p>
+                <p class="font-semibold mt-1">/OrchestratorAI/Exports</p>
+              </div>
+              <div class="border border-primary/10 rounded-lg p-4 md:col-span-2">
+                <p class="text-xs text-slate-500">明示許可フォルダ</p>
+                <ul class="mt-2 text-sm space-y-1">
+                  <li>・/OrchestratorAI/Exports/figma</li>
+                  <li>・/OrchestratorAI/Exports/reports</li>
+                  <li>・/OrchestratorAI/Exports/archive</li>
+                </ul>
+              </div>
+            </div>
+
+            <p class="mt-4 text-xs text-slate-500">監査観点: 出力先フォルダが SoT（Source of Truth）です。設定変更時は監査ログとの整合を確認してください。</p>
+
+            <div class="mt-6 flex flex-wrap gap-2">
+              <button class="px-4 py-2 text-sm rounded-lg bg-primary text-white">フォルダを選択（MVP: ダミー）</button>
+              <button class="px-4 py-2 text-sm rounded-lg border border-primary/30">許可フォルダを編集（MVP: ダミー）</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <script src="/ui/sidebar.js"></script>
+  </body>
+</html>
