@@ -1450,6 +1450,31 @@ function verifyPrUpFlowLock() {
   );
 }
 
+function verifyUiStaticIntegrity() {
+  const uiDir = path.join(process.cwd(), 'apps', 'hub', 'static', 'ui');
+  const sidebarPath = path.join(uiDir, 'partials', 'sidebar.html');
+  const sidebar = fs.readFileSync(sidebarPath, 'utf8');
+
+  const hrefMatches = Array.from(sidebar.matchAll(/href="([^"]+)"/g)).map((m) => m[1]);
+  const uiLinks = hrefMatches
+    .filter((href) => href.startsWith('/ui/') && href.endsWith('.html'))
+    .map((href) => href.replace('/ui/', ''));
+
+  const uniqueUiLinks = [...new Set(uiLinks)];
+  uniqueUiLinks.forEach((fileName) => {
+    const target = path.join(uiDir, fileName);
+    assert(fs.existsSync(target), `missing sidebar target html: ${fileName}`);
+  });
+
+  const htmlFiles = fs.readdirSync(uiDir).filter((name) => name.endsWith('.html'));
+  htmlFiles.forEach((name) => {
+    const fullPath = path.join(uiDir, name);
+    const text = fs.readFileSync(fullPath, 'utf8');
+    assert(!text.includes('<!--#include virtual='), `unexpanded SSI include in ${name}`);
+    assert(!text.includes('<!-- include: partials/'), `unexpanded build include in ${name}`);
+  });
+}
+
 async function verifyRunJobClientDepth() {
   const received = [];
   const server = http.createServer((req, res) => {
@@ -1567,6 +1592,7 @@ async function main() {
   await verifyFigmaDepthNormalization();
   verifyFigmaPlanGuarantee();
   verifyPhase2SamplesExist();
+  verifyUiStaticIntegrity();
   verifyHubDoctor();
   verifyPrUpFlowLock();
   await verifyRunJobClientDepth();

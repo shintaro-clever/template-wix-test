@@ -19,3 +19,4 @@ reports/*
 vault/tmp/
 ecosystem.config.cjs.bak*
 sue-0-mcp-runner-doc-fix
+.codex-home/

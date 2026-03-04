@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html class="dark" lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>AI Orchestrator - ダッシュボード</title>
+
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#a55c50",
+              "background-light": "#f7f6f6",
+              "background-dark": "#1d1615",
+            },
+            fontFamily: {
+              display: ["Inter", "Noto Sans JP", "sans-serif"],
+            },
+            borderRadius: {
+              DEFAULT: "0.25rem",
+              lg: "0.5rem",
+              xl: "0.75rem",
+              full: "9999px",
+            },
+          },
+        },
+      };
+    </script>
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #3d3432;
+        border-radius: 10px;
+      }
+    </style>
+  </head>
+
+  <body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display transition-colors duration-200">
+    <!-- build-static-ui meta -->
+    <!-- PAGE_TITLE: ダッシュボード -->
+    <!--
+      HEADER_RIGHT_CONTENT:
+      <button class="p-2 text-slate-500 hover:text-primary dark:text-slate-400 transition-colors relative">
+        <span class="material-symbols-outlined">notifications</span>
+        <span class="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-background-dark"></span>
+      </button>
+      <button class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20 active:scale-95">
+        <span class="material-symbols-outlined text-lg">add</span>
+        新規プロジェクト作成
+      </button>
+    -->
+
+    <div class="flex h-screen overflow-hidden">
+      <!-- Sidebar (common partial; expanded by build:ui) -->
+      <aside class="w-64 flex-shrink-0 border-r border-primary/10 bg-background-dark flex flex-col h-screen">
+  <div class="p-6 flex items-center gap-3">
+    <div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-white">
+      <span class="material-symbols-outlined text-xl">auto_fix</span>
+    </div>
+    <h1 class="text-lg font-bold tracking-tight text-white">Orchestrator AI</h1>
+  </div>
+
+  <nav class="flex-1 px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+    <div class="pb-4">
+      <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">メニュー</p>
+
+      <a data-nav-key="dashboard" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/dashboard.html">
+        <span class="material-symbols-outlined">dashboard</span>
+        <span class="text-sm font-medium">ダッシュボード</span>
+      </a>
+
+      <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/projects.html">
+        <span class="material-symbols-outlined">folder</span>
+        <span class="text-sm font-medium">プロジェクト</span>
+      </a>
+
+      <a data-nav-key="analytics" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/analytics.html">
+        <span class="material-symbols-outlined">bar_chart</span>
+        <span class="text-sm font-medium">アナリティクス</span>
+      </a>
+
+      <a data-nav-key="settings" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/settings.html">
+        <span class="material-symbols-outlined">settings</span>
+        <span class="text-sm font-medium">設定</span>
+      </a>
+    </div>
+
+    <div class="pt-4 border-t border-primary/10">
+      <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">連携済みツール</p>
+
+      <a class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="#">
+        <span class="material-symbols-outlined">polyline</span>
+        <span class="text-sm font-medium">Figma</span>
+      </a>
+
+      <a class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="#">
+        <span class="material-symbols-outlined">terminal</span>
+        <span class="text-sm font-medium">GitHub</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="p-4 mt-auto border-t border-primary/10">
+    <div class="flex items-center gap-3 p-2">
+      <img
+        alt="User Profile Picture"
+        class="w-8 h-8 rounded-full border border-primary/20"
+        src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7g1BuuuJtIrUQvaUNmkGWbnrwaEFpf56L6eXfbs4zB6ZlLJ-duWDEsyNceOVVWnYnNmjlaN58YNLD80rulC9yvLlOV-zMhW2kyp3JfpqBhYlkKwmbxv-m9gFYFHDY32juGN6JKyuz09WQHsEtVP3hVWh4agUBqgJ8cMK7-p1E8VThLxTx-Z6CTJiHWHpN_MudwBuyN4jQYIQmoLgk1jr91D3jndnsRzFTZGWJ42GEODQfZiQFfsZOsWyhaL56JlrESnsxteMohPw"
+      />
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-white truncate">田中 健一</p>
+        <p class="text-xs text-slate-500 truncate">Pro Plan</p>
+      </div>
+    </div>
+  </div>
+</aside>
+
+      <!-- Main Content Area -->
+      <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <!-- Header (common partial; expanded by build:ui) -->
+        <header class="h-16 border-b border-border-dark px-8 flex items-center justify-between bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md z-10">
+  <h2 class="text-xl font-bold">ダッシュボード</h2>
+  <button class="p-2 text-slate-500 hover:text-primary dark:text-slate-400 transition-colors relative">
+        <span class="material-symbols-outlined">notifications</span>
+        <span class="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-background-dark"></span>
+      </button>
+      <button class="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20 active:scale-95">
+        <span class="material-symbols-outlined text-lg">add</span>
+        新規プロジェクト作成
+      </button>
+</header>
+
+        <!-- Body -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-8">
+          <!-- Filter Row -->
+          <div class="flex items-center justify-between mb-8">
+            <div class="flex items-center gap-6">
+              <button class="text-sm font-bold border-b-2 border-primary pb-1">すべて</button>
+              <button class="text-sm font-medium text-slate-500 dark:text-slate-400 pb-1">進行中</button>
+              <button class="text-sm font-medium text-slate-500 dark:text-slate-400 pb-1">完了</button>
+              <button class="text-sm font-medium text-slate-500 dark:text-slate-400 pb-1">アーカイブ</button>
+            </div>
+
+            <div class="flex items-center gap-2 text-xs text-slate-500 bg-slate-100 dark:bg-primary/5 px-3 py-1.5 rounded-full">
+              <span class="material-symbols-outlined text-sm">sort</span>
+              並び替え: 最終更新日
+            </div>
+          </div>
+
+          <div id="dashboard-api-error" class="hidden mb-6 rounded-lg border border-rose-300/40 bg-rose-50 dark:bg-rose-900/10 px-4 py-3 text-xs text-rose-700 dark:text-rose-300"></div>
+
+          <section class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white dark:bg-background-dark/40 border border-slate-200 dark:border-primary/10 rounded-xl p-4">
+              <div class="text-xs text-slate-500">Projects</div>
+              <div class="text-2xl font-bold mt-1" data-kpi="projects_total">-</div>
+            </div>
+            <div class="bg-white dark:bg-background-dark/40 border border-slate-200 dark:border-primary/10 rounded-xl p-4">
+              <div class="text-xs text-slate-500">Runs</div>
+              <div class="text-2xl font-bold mt-1" data-kpi="runs_total">-</div>
+            </div>
+            <div class="bg-white dark:bg-background-dark/40 border border-slate-200 dark:border-primary/10 rounded-xl p-4">
+              <div class="text-xs text-slate-500">Failures</div>
+              <div class="text-2xl font-bold mt-1" data-kpi="runs_failed">-</div>
+            </div>
+            <div class="bg-white dark:bg-background-dark/40 border border-slate-200 dark:border-primary/10 rounded-xl p-4">
+              <div class="text-xs text-slate-500">Success Rate</div>
+              <div class="text-2xl font-bold mt-1" data-kpi="runs_success_rate">-</div>
+            </div>
+          </section>
+
+          <section class="bg-white dark:bg-background-dark/40 border border-slate-200 dark:border-primary/10 rounded-xl p-5 mb-8">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-bold">Recent runs</h3>
+              <span class="text-xs text-slate-500">/api/runs</span>
+            </div>
+            <div class="mt-3 overflow-x-auto custom-scrollbar">
+              <table class="min-w-full text-xs">
+                <thead>
+                  <tr class="text-slate-500 border-b border-slate-200 dark:border-primary/10">
+                    <th class="py-2 text-left">run_id</th>
+                    <th class="py-2 text-left">job_type</th>
+                    <th class="py-2 text-left">status</th>
+                    <th class="py-2 text-left">started_at</th>
+                  </tr>
+                </thead>
+                <tbody data-recent-runs>
+                  <tr><td class="py-2 text-slate-500" colspan="4">未計測</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <!-- Projects Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <!-- Card 1 -->
+            <div class="group relative bg-white dark:bg-background-dark/40 border border-slate-200 dark:border-primary/10 rounded-xl p-5 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 transition-all cursor-pointer">
+              <div class="flex justify-between items-start mb-4">
+                <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-primary">shopping_bag</span>
+                </div>
+                <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-500 uppercase tracking-wider">進行中</span>
+              </div>
+              <h3 class="text-base font-bold mb-1 group-hover:text-primary transition-colors">ECモバイルアプリ v2.4</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mb-6 flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">history</span>
+                最終更新: 2時間前
+              </p>
+
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex -space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-white dark:border-background-dark flex items-center justify-center" title="Figma">
+                      <img alt="Figma" class="w-3 h-3" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpy87gGKWkDX9nSdZQx5poLBnfDTUXmbejX_Idfe32MvOkHVYqdus9OD65H7wLaMdUGn1NI9NrUgjiT-eur8UfkAoGUo9rbRixBbLtau0M9scAlotNoq8OIwrQaSj_p4eNNggd2yTBUlwLMeX6fa6vl5M2ZlUaO54raThSHGRXvz3qdzFEmpht22Hyt6zw5xp2gy4_zPVvcVO1E-vbH41KwdFbJUdMhTCKGpqUzYokUjwcsZYCqID280Wl75aOQZvteZrN091fAn8" />
+                    </div>
+                    <div class="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-white dark:border-background-dark flex items-center justify-center" title="GitHub">
+                      <img alt="GitHub" class="w-3 h-3 dark:invert" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA4nL00Wbytq81XWOccAJAoNhTvBPPlml6R2jZ9uVZTk4bIGcXf2j5VsrUfbbz1vNobA4X6VpqgHVUBsfLV8qQYu3-vYcy2AsXhA0u3a_Ol3PU8CyGg5rN2bfnMzM8kYRUsMrZHjQRSlQDZJSVwXWQIxZoI2TfjPVm3vYaFt1QQAfDYMAhlVCbX12fM9l0uRbUxVUHHDuDsrDEHcRQoZkURbIFl1dpHu3n7hmerG3sMXr-O1mYMAszi7tJBR-e2sqZxEDsq7LPujtI" />
+                    </div>
+                  </div>
+                  <span class="text-[11px] font-semibold text-primary">65% 完了</span>
+                </div>
+
+                <div class="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-primary rounded-full transition-all duration-500" style="width: 65%"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2 -->
+            <div class="group relative bg-white dark:bg-background-dark/40 border border-slate-200 dark:border-primary/10 rounded-xl p-5 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 transition-all cursor-pointer">
+              <div class="flex justify-between items-start mb-4">
+                <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-primary">badge</span>
+                </div>
+                <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-500 uppercase tracking-wider">同期完了</span>
+              </div>
+              <h3 class="text-base font-bold mb-1 group-hover:text-primary transition-colors">社内勤怠システム</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mb-6 flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">history</span>
+                最終更新: 昨日
+              </p>
+
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex -space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-white dark:border-background-dark flex items-center justify-center" title="GitHub">
+                      <img alt="GitHub" class="w-3 h-3 dark:invert" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIgDwiD9MjI81HNCKSecUZNdUTaJWkhVdMtoo4Vr7Ow5seHvd1dvQMazBKC2PVI9tl_Mi0dGftgE1xflKRCLYcjLgz1ceQdx8N8yfe7OvqROJ6dtTQAK5FXkEgaScLsplYIT3xZ1w3HKvZzWRilf_yFz49P5QTB1Swmo_yUnUX4vIsI2V2Y6ydMim44662OOXaUaKTcwC547Cxv75vRDAZvyGqLniMOMgwIIgh-4cpebAhPG9Otm6dDGbkyaysO_HTVYmjyLp2YfI" />
+                    </div>
+                    <div class="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-white dark:border-background-dark flex items-center justify-center" title="Terminal">
+                      <span class="material-symbols-outlined text-[10px]">terminal</span>
+                    </div>
+                  </div>
+                  <span class="text-[11px] font-semibold text-emerald-500">100% 完了</span>
+                </div>
+
+                <div class="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: 100%"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 3 -->
+            <div class="group relative bg-white dark:bg-background-dark/40 border border-slate-200 dark:border-primary/10 rounded-xl p-5 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 transition-all cursor-pointer">
+              <div class="flex justify-between items-start mb-4">
+                <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-primary">public</span>
+                </div>
+                <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-500 uppercase tracking-wider">エラー</span>
+              </div>
+              <h3 class="text-base font-bold mb-1 group-hover:text-primary transition-colors">ポートフォリオサイト</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mb-6 flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">history</span>
+                最終更新: 3日前
+              </p>
+
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex -space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-white dark:border-background-dark flex items-center justify-center" title="Figma">
+                      <img alt="Figma" class="w-3 h-3" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjcFTKjQxPZuuBaCLAOe2zKfM9VH87ZJSVkv8WSbrQt582dqvABnH4CvmKRSXFK4OUgYyRQVg-kXNvsBZ4rdcKFGb-KrVqz0xD-cdNE5lN4wJn2EtB9ioSHgszbyshUJcsQCJdkTicbFHKToeniJwODpJH2idzbdIFl19acIT4GS_9DQJW04rYKR21JqzQQ-dG93KDQ8DQ30MEfwTfRuK9XrAKCklSU1_zlD1HxM_9z90ZxvLVJl1KRRJjNXJBYwtm_Sej_KY77Lg" />
+                    </div>
+                  </div>
+                  <span class="text-[11px] font-semibold text-rose-500">22% 停止中</span>
+                </div>
+
+                <div class="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-rose-500 rounded-full transition-all duration-500" style="width: 22%"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 4 -->
+            <div class="group relative bg-white dark:bg-background-dark/40 border border-slate-200 dark:border-primary/10 rounded-xl p-5 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 transition-all cursor-pointer">
+              <div class="flex justify-between items-start mb-4">
+                <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-primary">analytics</span>
+                </div>
+                <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-500 uppercase tracking-wider">進行中</span>
+              </div>
+              <h3 class="text-base font-bold mb-1 group-hover:text-primary transition-colors">マーケティング・ダッシュボード</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mb-6 flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">history</span>
+                最終更新: 4時間前
+              </p>
+
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex -space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-white dark:border-background-dark flex items-center justify-center" title="GitHub">
+                      <img alt="GitHub" class="w-3 h-3 dark:invert" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9czs3dOIxMVWccNI_hkCASqZ-cJwqXbOM45V68gCAqCOtz9QqVaAIFbSiSxJFGSq3oYzkSDs8RJkYmgB1txgHBINiQYswyBLZACevvlLRioP0uK9oTOIy9Sw5lySOdKXDQEeLwMbt_P9l7WIzryqxd2-yn54DHwpiJ-L8bESgmrdPMAvBiwBZBq_Mi2UNlpAXRxtFC99HggnqrHP_kKA8uIf0_sOnOndA5bH4Zjh2UL6u9cWHVvIZPCDFPuxRNjbFQXgZ6MM00yw" />
+                    </div>
+                    <div class="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-white dark:border-background-dark flex items-center justify-center" title="Monitoring">
+                      <span class="material-symbols-outlined text-[10px]">monitoring</span>
+                    </div>
+                  </div>
+                  <span class="text-[11px] font-semibold text-primary">48% 完了</span>
+                </div>
+
+                <div class="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-primary rounded-full transition-all duration-500" style="width: 48%"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 5 -->
+            <div class="group relative bg-white dark:bg-background-dark/40 border border-slate-200 dark:border-primary/10 rounded-xl p-5 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 transition-all cursor-pointer">
+              <div class="flex justify-between items-start mb-4">
+                <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-primary">psychology</span>
+                </div>
+                <span class="px-2.5 py-1 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-500 uppercase tracking-wider">同期完了</span>
+              </div>
+              <h3 class="text-base font-bold mb-1 group-hover:text-primary transition-colors">AIカスタマーサポート</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 mb-6 flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">history</span>
+                最終更新: 2日前
+              </p>
+
+              <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                  <div class="flex -space-x-2">
+                    <div class="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-white dark:border-background-dark flex items-center justify-center" title="GitHub">
+                      <img alt="GitHub" class="w-3 h-3 dark:invert" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCp_dR1K16tilm0U0YPrVWi71vZua8oG995ODaDQnhDeGcnDW3hQ__OuMzYDnCVyHLRgfDSPWANPXUPi4tUVR8md_GcenNcTie-Ns1-t439g9AyJieuRh9ooM0-Ed3bR4Xj_GX_xdjqS4rWw-xxg1IfZBErRuXg3z4s6oOzIHucK18eWpyd-_CykFWap2D6Q9_kLmqiW9UfiMkguB-Jy-N9qH3VJnqE-hWo7F14BU38I4DnykAWaRW_ZlIhjQH3n87h9YPXX_awb58" />
+                    </div>
+                  </div>
+                  <span class="text-[11px] font-semibold text-emerald-500">100% 完了</span>
+                </div>
+
+                <div class="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: 100%"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Add Project Placeholder -->
+            <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-primary/20 rounded-xl p-8 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group">
+              <div class="w-12 h-12 rounded-full bg-slate-100 dark:bg-primary/10 flex items-center justify-center text-slate-400 group-hover:text-primary group-hover:bg-primary/20 transition-all mb-4">
+                <span class="material-symbols-outlined text-2xl">add</span>
+              </div>
+              <p class="text-sm font-semibold text-slate-500 group-hover:text-primary">新しいプロジェクトを追加</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Stats -->
+        <footer class="px-8 py-3 border-t border-slate-200 dark:border-primary/10 flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+          <div class="flex gap-4">
+            <span>アクティブなタスク: 12</span>
+            <span>現在の同期速度: 1.2 GB/S</span>
+          </div>
+          <div class="flex gap-2 items-center">
+            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+            <span>全システム正常</span>
+          </div>
+        </footer>
+      </main>
+    </div>
+
+    <!-- Sidebar active -->
+    <script src="sidebar.js"></script>
+    <script type="module">
+      const errEl = document.getElementById("dashboard-api-error");
+      const kpi = (key, value) => {
+        const el = document.querySelector(`[data-kpi="${key}"]`);
+        if (el) el.textContent = value;
+      };
+      const esc = (s) => (s ?? "").toString().replace(/[&<>"]/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;" }[c]));
+      const normItems = (payload) => Array.isArray(payload) ? payload : (payload && Array.isArray(payload.items) ? payload.items : []);
+
+      async function fetchJson(url) {
+        const res = await fetch(url, { headers: { "Accept": "application/json" } });
+        const text = await res.text();
+        let json = null;
+        try { json = text ? JSON.parse(text) : null; } catch (_) {}
+        if (!res.ok) throw new Error((json && (json.message || json.error)) || text || `HTTP ${res.status}`);
+        return json;
+      }
+
+      async function load() {
+        try {
+          const [projectsRaw, runsRaw] = await Promise.all([
+            fetchJson("/api/projects"),
+            fetchJson("/api/runs"),
+          ]);
+          const projects = normItems(projectsRaw);
+          const runs = normItems(runsRaw);
+          const failed = runs.filter((r) => ["failed","error"].includes(String(r.status || "").toLowerCase())).length;
+          const success = runs.filter((r) => ["success","succeeded","done"].includes(String(r.status || "").toLowerCase())).length;
+          const successRate = runs.length ? Math.round((success / runs.length) * 100) : 0;
+
+          kpi("projects_total", String(projects.length));
+          kpi("runs_total", String(runs.length));
+          kpi("runs_failed", String(failed));
+          kpi("runs_success_rate", runs.length ? `${successRate}%` : "未計測");
+
+          const tbody = document.querySelector("[data-recent-runs]");
+          if (tbody) {
+            const rows = runs.slice(0, 5);
+            if (!rows.length) {
+              tbody.innerHTML = '<tr><td class="py-2 text-slate-500" colspan="4">0件</td></tr>';
+            } else {
+              tbody.innerHTML = rows.map((r) => `<tr class="border-b border-slate-100 dark:border-primary/10"><td class="py-2 font-mono">${esc(r.run_id || r.id || "-")}</td><td class="py-2">${esc(r.job_type || "-")}</td><td class="py-2">${esc(r.status || "-")}</td><td class="py-2 font-mono">${esc(r.started_at || r.created_at || "-")}</td></tr>`).join("");
+            }
+          }
+          errEl.classList.add("hidden");
+        } catch (e) {
+          errEl.textContent = `API取得に失敗: ${e.message}`;
+          errEl.classList.remove("hidden");
+          kpi("projects_total", "未計測");
+          kpi("runs_total", "未計測");
+          kpi("runs_failed", "未計測");
+          kpi("runs_success_rate", "未計測");
+        }
+      }
+
+      load();
+    </script>
+  </body>
+</html>

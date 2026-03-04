@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>Orchestrator AI - 設定 / 言語</title>
+    <title data-i18n>ui.settingsLanguage.title</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
@@ -37,12 +37,75 @@
   </head>
 
   <body data-page="settings" class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display flex h-screen overflow-hidden">
-    <!--#include virtual="partials/sidebar.html" -->
-    <!-- include: partials/sidebar.html -->
+    <aside class="w-64 flex-shrink-0 border-r border-primary/10 bg-background-dark flex flex-col h-screen">
+  <div class="p-6 flex items-center gap-3">
+    <div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-white">
+      <span class="material-symbols-outlined text-xl">auto_fix</span>
+    </div>
+    <h1 class="text-lg font-bold tracking-tight text-white">Orchestrator AI</h1>
+  </div>
+
+  <nav class="flex-1 px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+    <div class="pb-4">
+      <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2" data-i18n="nav.menu">メニュー</p>
+
+      <a data-nav-key="dashboard" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/dashboard.html">
+        <span class="material-symbols-outlined">dashboard</span>
+        <span class="text-sm font-medium" data-i18n="nav.dashboard">ダッシュボード</span>
+      </a>
+
+      <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/projects.html">
+        <span class="material-symbols-outlined">folder</span>
+        <span class="text-sm font-medium" data-i18n="nav.projects">プロジェクト</span>
+      </a>
+
+      <a data-nav-key="analytics" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/analytics.html">
+        <span class="material-symbols-outlined">bar_chart</span>
+        <span class="text-sm font-medium" data-i18n="nav.analytics">アナリティクス</span>
+      </a>
+
+      <a data-nav-key="settings" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/settings.html">
+        <span class="material-symbols-outlined">settings</span>
+        <span class="text-sm font-medium" data-i18n="nav.settings">設定</span>
+      </a>
+    </div>
+
+    <div class="pt-4 border-t border-primary/10">
+      <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2" data-i18n="common.integrated_tools">連携済みツール</p>
+
+      <a class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="#">
+        <span class="material-symbols-outlined">polyline</span>
+        <span class="text-sm font-medium" data-i18n="common.figma">Figma</span>
+      </a>
+
+      <a class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="#">
+        <span class="material-symbols-outlined">terminal</span>
+        <span class="text-sm font-medium" data-i18n="common.github">GitHub</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="p-4 mt-auto border-t border-primary/10">
+    <div class="flex items-center gap-3 p-2">
+      <img
+        alt="User Profile Picture"
+        class="w-8 h-8 rounded-full border border-primary/20"
+        src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7g1BuuuJtIrUQvaUNmkGWbnrwaEFpf56L6eXfbs4zB6ZlLJ-duWDEsyNceOVVWnYnNmjlaN58YNLD80rulC9yvLlOV-zMhW2kyp3JfpqBhYlkKwmbxv-m9gFYFHDY32juGN6JKyuz09WQHsEtVP3hVWh4agUBqgJ8cMK7-p1E8VThLxTx-Z6CTJiHWHpN_MudwBuyN4jQYIQmoLgk1jr91D3jndnsRzFTZGWJ42GEODQfZiQFfsZOsWyhaL56JlrESnsxteMohPw"
+      />
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-white truncate">田中 健一</p>
+        <p class="text-xs text-slate-500 truncate">Pro Plan</p>
+      </div>
+    </div>
+  </div>
+</aside>
 
     <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
-      <!--#include virtual="partials/header.html" -->
-      <!-- include: partials/header.html (replace {{PAGE_TITLE}} -> 設定, {{HEADER_RIGHT_CONTENT}} -> <div class="text-xs text-text-muted">Language</div>) -->
+      <header class="h-16 border-b border-border-dark px-8 flex items-center justify-between bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md z-10">
+  <h2 class="text-xl font-bold" data-i18n="title.settings">設定</h2>
+  <div class="text-xs text-text-muted">Language</div>
+</header>
+
 
       <div class="bg-background-light dark:bg-background-dark px-8 pt-6 border-b border-primary/10">
         <nav class="flex flex-wrap gap-6">
@@ -58,24 +121,35 @@
       <div class="flex-1 overflow-y-auto custom-scrollbar bg-background-light dark:bg-background-dark p-8">
         <div class="max-w-4xl space-y-6 pb-12">
           <section class="bg-white dark:bg-card-dark border border-primary/10 rounded-xl p-6">
-            <h3 class="text-lg font-bold">言語設定</h3>
-            <p class="text-sm text-slate-500 mt-1">表示言語と出力時の既定言語を設定します（MVP: 表示のみ）。</p>
+            <h3 class="text-lg font-bold" data-i18n="ui.settingsLanguage.h1">言語設定</h3>
+            <p class="text-sm text-slate-500 mt-1" data-i18n="ui.settingsLanguage.stub">未実装（Stub）</p>
 
             <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <label class="border border-primary/10 rounded-lg p-4 flex items-center gap-3">
-                <input type="radio" name="ui-lang" checked />
+                <input id="ui-lang-ja" type="radio" name="ui-lang" value="ja" checked />
                 <div>
                   <p class="font-semibold">日本語</p>
                   <p class="text-xs text-slate-500">UI / エクスポート既定</p>
                 </div>
               </label>
               <label class="border border-primary/10 rounded-lg p-4 flex items-center gap-3">
-                <input type="radio" name="ui-lang" />
+                <input id="ui-lang-en" type="radio" name="ui-lang" value="en" />
                 <div>
                   <p class="font-semibold">English</p>
                   <p class="text-xs text-slate-500">UI / export default</p>
                 </div>
               </label>
+            </div>
+
+            <div class="mt-4 flex items-center gap-3">
+              <button
+                id="save-ui-lang"
+                type="button"
+                class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors"
+              >
+                <span data-i18n="ui.settingsLanguage.save">言語を保存</span>
+              </button>
+              <p id="save-ui-lang-status" class="text-xs text-slate-500"></p>
             </div>
 
             <div class="mt-6 rounded-lg border border-primary/10 p-4 text-sm space-y-1">
@@ -88,6 +162,41 @@
       </div>
     </main>
 
+    <script>
+      (function () {
+        var STORAGE_KEY = "ui_lang";
+        var radios = Array.prototype.slice.call(document.querySelectorAll('input[name="ui-lang"]'));
+        var saveButton = document.getElementById("save-ui-lang");
+        var statusEl = document.getElementById("save-ui-lang-status");
+        if (!radios.length || !saveButton) return;
+
+        var initial = "ja";
+        try {
+          var saved = (localStorage.getItem(STORAGE_KEY) || "").trim().toLowerCase();
+          if (saved === "ja" || saved === "en") initial = saved;
+        } catch (_) {}
+
+        radios.forEach(function (radio) {
+          radio.checked = radio.value === initial;
+        });
+
+        saveButton.addEventListener("click", function () {
+          var selected = radios.find(function (radio) {
+            return radio.checked;
+          });
+          var lang = selected && (selected.value === "en" || selected.value === "ja") ? selected.value : "ja";
+          try {
+            localStorage.setItem(STORAGE_KEY, lang);
+            if (statusEl) statusEl.textContent = "Saved. Reloading...";
+          } catch (_) {
+            if (statusEl) statusEl.textContent = "Save failed.";
+            return;
+          }
+          window.location.reload();
+        });
+      })();
+    </script>
+    <script src="/ui/i18n/i18n.js" defer></script>
     <script src="/ui/sidebar.js"></script>
   </body>
 </html>

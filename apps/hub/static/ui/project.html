@@ -3,19 +3,163 @@
 <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-  <title>Orchestrator AI - project</title>
+  <title>Orchestrator AI - プロジェクトホーム</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = { darkMode:"class", theme:{ extend:{ colors:{
+      primary:"#a55c50","background-light":"#f7f6f6","background-dark":"#1d1615",
+      "card-dark":"#251f1e","border-dark":"#3d3432","text-muted":"#b1a7a5"
+    }, fontFamily:{display:["Inter","sans-serif"]}, borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem",full:"9999px"} } } };
+  </script>
+  <style>
+    body{font-family:'Inter',"Noto Sans JP",sans-serif;}
+    .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}
+    .custom-scrollbar::-webkit-scrollbar{width:6px;height:6px;}
+    .custom-scrollbar::-webkit-scrollbar-thumb{background:#3d3432;border-radius:10px;}
+    .status-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:9999px;font-size:11px;font-weight:700;line-height:1;}
+  </style>
 </head>
 <body data-page="projects" class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex overflow-hidden">
-  <!--#include virtual="partials/sidebar.html" -->
-  <!-- include: partials/sidebar.html -->
+  <aside class="w-64 flex-shrink-0 border-r border-primary/10 bg-background-dark flex flex-col h-screen">
+  <div class="p-6 flex items-center gap-3">
+    <div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-white">
+      <span class="material-symbols-outlined text-xl">auto_fix</span>
+    </div>
+    <h1 class="text-lg font-bold tracking-tight text-white">Orchestrator AI</h1>
+  </div>
+
+  <nav class="flex-1 px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+    <div class="pb-4">
+      <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">メニュー</p>
+
+      <a data-nav-key="dashboard" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/dashboard.html">
+        <span class="material-symbols-outlined">dashboard</span>
+        <span class="text-sm font-medium">ダッシュボード</span>
+      </a>
+
+      <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/projects.html">
+        <span class="material-symbols-outlined">folder</span>
+        <span class="text-sm font-medium">プロジェクト</span>
+      </a>
+
+      <a data-nav-key="analytics" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/analytics.html">
+        <span class="material-symbols-outlined">bar_chart</span>
+        <span class="text-sm font-medium">アナリティクス</span>
+      </a>
+
+      <a data-nav-key="settings" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/settings.html">
+        <span class="material-symbols-outlined">settings</span>
+        <span class="text-sm font-medium">設定</span>
+      </a>
+    </div>
+
+    <div class="pt-4 border-t border-primary/10">
+      <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">連携済みツール</p>
+
+      <a class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="#">
+        <span class="material-symbols-outlined">polyline</span>
+        <span class="text-sm font-medium">Figma</span>
+      </a>
+
+      <a class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="#">
+        <span class="material-symbols-outlined">terminal</span>
+        <span class="text-sm font-medium">GitHub</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="p-4 mt-auto border-t border-primary/10">
+    <div class="flex items-center gap-3 p-2">
+      <img
+        alt="User Profile Picture"
+        class="w-8 h-8 rounded-full border border-primary/20"
+        src="https://lh3.googleusercontent.com/aida-public/AB6AXuB7g1BuuuJtIrUQvaUNmkGWbnrwaEFpf56L6eXfbs4zB6ZlLJ-duWDEsyNceOVVWnYnNmjlaN58YNLD80rulC9yvLlOV-zMhW2kyp3JfpqBhYlkKwmbxv-m9gFYFHDY32juGN6JKyuz09WQHsEtVP3hVWh4agUBqgJ8cMK7-p1E8VThLxTx-Z6CTJiHWHpN_MudwBuyN4jQYIQmoLgk1jr91D3jndnsRzFTZGWJ42GEODQfZiQFfsZOsWyhaL56JlrESnsxteMohPw"
+      />
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-white truncate">田中 健一</p>
+        <p class="text-xs text-slate-500 truncate">Pro Plan</p>
+      </div>
+    </div>
+  </div>
+</aside>
 
   <main class="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
-    <!--#include virtual="partials/header.html" -->
-    <!-- include: partials/header.html (replace {{PAGE_TITLE}} -> Projects, {{HEADER_RIGHT_CONTENT}} -> <div class=\"text-xs text-text-muted\">project</div>) -->
+    <header class="h-16 border-b border-border-dark px-6 md:px-8 flex items-center justify-between bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md z-10">
+      <div>
+        <h2 class="text-xl font-bold">Webリニューアル 2026</h2>
+        <p class="text-xs text-text-muted">project-web-2026</p>
+      </div>
+      <span class="status-badge bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">進行中</span>
+    </header>
 
-    <div class="flex-1 overflow-y-auto p-8">
-      <!-- TODO: project page placeholder -->
+    <div class="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar space-y-6">
+      <section class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        <div class="xl:col-span-8 space-y-4">
+          <article class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-5">
+            <h3 class="text-base font-bold">入力領域</h3>
+            <p class="text-xs text-text-muted mt-1">ここに要件や指示を書き、主要アクションを実行します（MVP: UIのみ）。</p>
+            <textarea class="mt-4 w-full h-44 rounded-lg border border-border-dark bg-background-light dark:bg-background-dark text-sm p-3" placeholder="例: トップページのヒーローを改善し、CTAを目立たせる。"></textarea>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button class="px-4 py-2 text-sm rounded-lg bg-primary text-white font-semibold hover:bg-primary/90">実行する</button>
+              <button class="px-4 py-2 text-sm rounded-lg border border-primary/30">下書き保存</button>
+              <button class="px-4 py-2 text-sm rounded-lg border border-primary/30">テンプレート挿入</button>
+            </div>
+          </article>
+
+          <article class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-5">
+            <h3 class="text-base font-bold">Quick actions</h3>
+            <div class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+              <button class="p-4 rounded-lg border border-border-dark text-left hover:border-primary/40 transition">
+                <p class="font-semibold text-sm">要件を要約</p>
+                <p class="text-xs text-text-muted mt-1">現状のタスクを短く整理</p>
+              </button>
+              <button class="p-4 rounded-lg border border-border-dark text-left hover:border-primary/40 transition">
+                <p class="font-semibold text-sm">差分をレビュー</p>
+                <p class="text-xs text-text-muted mt-1">未コミット変更の確認</p>
+              </button>
+              <button class="p-4 rounded-lg border border-border-dark text-left hover:border-primary/40 transition">
+                <p class="font-semibold text-sm">PR本文を作成</p>
+                <p class="text-xs text-text-muted mt-1">変更概要をテンプレ化</p>
+              </button>
+            </div>
+          </article>
+        </div>
+
+        <aside class="xl:col-span-4 space-y-4">
+          <article class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-5">
+            <h3 class="text-sm font-bold">Resources</h3>
+            <ul class="mt-3 space-y-2 text-sm">
+              <li class="p-3 rounded-lg border border-border-dark">Figma: Main file v2.1</li>
+              <li class="p-3 rounded-lg border border-border-dark">PRD: UI refresh draft</li>
+              <li class="p-3 rounded-lg border border-border-dark">API schema: /api/runs</li>
+            </ul>
+          </article>
+
+          <article class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-5">
+            <h3 class="text-sm font-bold">Roadmap</h3>
+            <ol class="mt-3 space-y-2 text-sm text-text-muted">
+              <li>1. 情報設計の確定</li>
+              <li>2. 主要画面の静的実装</li>
+              <li>3. 接続管理の導線整理</li>
+              <li>4. QA / PR提出</li>
+            </ol>
+          </article>
+
+          <article class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-5">
+            <h3 class="text-sm font-bold">Recent files</h3>
+            <ul class="mt-3 space-y-2 text-sm">
+              <li class="flex items-center justify-between"><span>projects.html</span><span class="text-xs text-text-muted">5m ago</span></li>
+              <li class="flex items-center justify-between"><span>project.html</span><span class="text-xs text-text-muted">14m ago</span></li>
+              <li class="flex items-center justify-between"><span>settings-drive.html</span><span class="text-xs text-text-muted">28m ago</span></li>
+            </ul>
+          </article>
+        </aside>
+      </section>
     </div>
   </main>
+
+  <script src="/ui/sidebar.js"></script>
 </body>
 </html>
