@@ -1263,6 +1263,27 @@ async function verifyServerRoutes() {
   assert(connectors.statusCode === 200, '/connectors UI should be available');
   const runs = await requestLocal(app, { path: '/runs' });
   assert(runs.statusCode === 200, '/runs UI should be available');
+
+  const createRunRes = await requestLocal(app, {
+    method: 'POST',
+    path: '/api/runs',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      job_type: 'integration_hub.phase1.code_to_figma_from_url',
+      inputs: { url: 'https://example.com' }
+    })
+  });
+  assert(createRunRes.statusCode === 201, 'POST /api/runs should return 201');
+  const createdRun = JSON.parse(createRunRes.body || '{}');
+  assert(typeof createdRun.run_id === 'string' && createdRun.run_id.length > 0, 'POST /api/runs should return run_id');
+
+  const apiRunsRes = await requestLocal(app, { path: '/api/runs' });
+  assert(apiRunsRes.statusCode === 200, 'GET /api/runs should return 200');
+  const apiRuns = JSON.parse(apiRunsRes.body || '{}');
+  assert(Array.isArray(apiRuns.runs), 'GET /api/runs should return { runs: [] }');
+  assert(apiRuns.runs.some((row) => row && row.run_id === createdRun.run_id), 'created run should be listed in GET /api/runs');
+
+  fs.rmSync(path.join(RUNS_ROOT, createdRun.run_id), { recursive: true, force: true });
 }
 
 function verifyCleanupRunsScript() {

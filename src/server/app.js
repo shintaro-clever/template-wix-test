@@ -711,6 +711,37 @@ function getRunDetail(runId) {
   };
 }
 
+function createQueuedRunRecord({ jobType, inputs = {}, targetPath = '' }) {
+  const runId = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const normalizedInputs = inputs && typeof inputs === 'object' && !Array.isArray(inputs) ? { ...inputs } : {};
+  const finalTargetPath =
+    typeof targetPath === 'string' && targetPath.trim()
+      ? targetPath.trim()
+      : `.ai-runs/${runId}/result.json`;
+  normalizedInputs.target_path = finalTargetPath;
+
+  const runDir = path.join(RUNS_DIR, runId);
+  fs.mkdirSync(runDir, { recursive: true });
+  const runJson = {
+    meta: {
+      created_at: createdAt,
+      status: 'queued',
+      source: 'api/runs'
+    },
+    job: {
+      job_type: jobType,
+      inputs: normalizedInputs
+    },
+    runnerResult: {
+      status: 'queued',
+      artifacts: []
+    }
+  };
+  fs.writeFileSync(path.join(runDir, 'run.json'), JSON.stringify(runJson, null, 2));
+  return runId;
+}
+
 function handleRunArtifactRequest(runId, artifactPathParam, res, method) {
   if (!artifactPathParam) {
     sendJson(res, 400, { error: 'artifact path is required' });
@@ -954,6 +985,46 @@ async function handleSmokeApi(req, res, method) {
 }
 
 function handleRunsApi(req, res, method, runId) {
+  if (method === 'POST' && !runId) {
+    const handlePost = async () => {
+      let payload;
+      try {
+        payload = await parseJsonBody(req);
+      } catch {
+        sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSONが不正です', { failure_code: 'validation_error' });
+        return;
+      }
+      const jobType = typeof payload?.job_type === 'string' ? payload.job_type.trim() : '';
+      const inputs = payload?.inputs;
+      const targetPath = payload?.target_path;
+
+      if (!jobType) {
+        sendJsonError(res, 400, 'VALIDATION_ERROR', '入力が不正です', { failure_code: 'validation_error' });
+        return;
+      }
+      if (inputs !== undefined && (!inputs || typeof inputs !== 'object' || Array.isArray(inputs))) {
+        sendJsonError(res, 400, 'VALIDATION_ERROR', '入力が不正です', { failure_code: 'validation_error' });
+        return;
+      }
+      if (targetPath !== undefined && (typeof targetPath !== 'string' || !targetPath.trim())) {
+        sendJsonError(res, 400, 'VALIDATION_ERROR', '入力が不正です', { failure_code: 'validation_error' });
+        return;
+      }
+
+      try {
+        const createdRunId = createQueuedRunRecord({
+          jobType,
+          inputs: inputs && typeof inputs === 'object' ? inputs : {},
+          targetPath: typeof targetPath === 'string' ? targetPath : ''
+        });
+        sendJson(res, 201, { run_id: createdRunId, status: 'queued' });
+      } catch (error) {
+        sendJsonError(res, 500, 'SERVICE_UNAVAILABLE', 'run create failed', { failure_code: 'service_unavailable' });
+      }
+    };
+    handlePost();
+    return;
+  }
   if (method !== 'GET') {
     sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed', { failure_code: 'validation_error' });
     return;

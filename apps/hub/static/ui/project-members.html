@@ -105,8 +105,57 @@
 
       <div class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8">
         <section class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-6">
-          <h1 class="text-xl font-bold" data-i18n="ui.project_members.h1">project-members</h1>
-          <p class="mt-2 text-sm text-text-muted" data-i18n="ui.project_members.stub">This page is a UI stub.</p>
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 class="text-xl font-bold" data-i18n="ui.project_members.h1">プロジェクトメンバー</h1>
+              <p class="mt-2 text-sm text-text-muted" data-i18n="ui.project_members.desc">参加メンバーと権限状況を確認します。</p>
+            </div>
+            <a class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors" href="/ui/project-invites.html" data-i18n="ui.project_members.inviteCta">
+              招待へ進む
+            </a>
+          </div>
+
+          <div class="mt-6 overflow-x-auto rounded-lg border border-border-dark">
+            <table class="min-w-full text-sm">
+              <thead class="bg-slate-100 dark:bg-background-dark/70">
+                <tr class="text-left text-slate-600 dark:text-slate-300">
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.project_members.col.name">Name</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.project_members.col.email">Email</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.project_members.col.role">Role</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.project_members.col.status">Status</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.project_members.col.lastActive">LastActive</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.project_members.col.actions">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-t border-border-dark">
+                  <td class="px-4 py-3">Ken Tanaka</td>
+                  <td class="px-4 py-3">ken@example.com</td>
+                  <td class="px-4 py-3">Owner</td>
+                  <td class="px-4 py-3"><span class="inline-flex px-2 py-1 rounded-full text-xs bg-emerald-500/15 text-emerald-500" data-i18n="ui.project_members.status.active">active</span></td>
+                  <td class="px-4 py-3">2026-03-04 09:42</td>
+                  <td class="px-4 py-3">
+                    <button class="text-xs px-2 py-1 rounded border border-border-dark hover:bg-slate-100 dark:hover:bg-background-dark/80" type="button" data-i18n="ui.project_members.action.manage">管理</button>
+                  </td>
+                </tr>
+                <tr class="border-t border-border-dark">
+                  <td class="px-4 py-3">Aoi Sato</td>
+                  <td class="px-4 py-3">aoi@example.com</td>
+                  <td class="px-4 py-3">Editor</td>
+                  <td class="px-4 py-3"><span class="inline-flex px-2 py-1 rounded-full text-xs bg-amber-500/15 text-amber-500" data-i18n="ui.project_members.status.pending">pending</span></td>
+                  <td class="px-4 py-3">-</td>
+                  <td class="px-4 py-3">
+                    <button class="text-xs px-2 py-1 rounded border border-border-dark hover:bg-slate-100 dark:hover:bg-background-dark/80" type="button" data-i18n="ui.project_members.action.remind">再通知</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-6 rounded-lg border border-dashed border-border-dark p-6 text-center">
+            <p class="text-sm font-semibold" data-i18n="ui.project_members.empty.title">メンバーがまだいません</p>
+            <p class="mt-1 text-xs text-text-muted" data-i18n="ui.project_members.empty.desc">招待を送るとここに表示されます。</p>
+          </div>
         </section>
       </div>
     </main>

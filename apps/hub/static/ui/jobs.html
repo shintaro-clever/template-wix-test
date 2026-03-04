@@ -105,8 +105,40 @@
 
       <div class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8">
         <section class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-6">
-          <h1 class="text-xl font-bold" data-i18n="ui.jobs.h1">jobs</h1>
-          <p class="mt-2 text-sm text-text-muted" data-i18n="ui.jobs.stub">This page is a UI stub.</p>
+          <h1 class="text-xl font-bold" data-i18n="ui.jobs.h1">ジョブ一覧</h1>
+          <p class="mt-2 text-sm text-text-muted" data-i18n="ui.jobs.desc">定義済みジョブのスキーマと更新状態を確認します。</p>
+
+          <div class="mt-6 overflow-x-auto rounded-lg border border-border-dark">
+            <table class="min-w-full text-sm">
+              <thead class="bg-slate-100 dark:bg-background-dark/70">
+                <tr class="text-left text-slate-600 dark:text-slate-300">
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.jobs.col.jobType">JobType</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.jobs.col.summary">Summary</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.jobs.col.schema">Schema</th>
+                  <th class="px-4 py-3 font-semibold" data-i18n="ui.jobs.col.updated">Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-t border-border-dark">
+                  <td class="px-4 py-3">integration_hub.phase1.code_to_figma_from_url</td>
+                  <td class="px-4 py-3" data-i18n="ui.jobs.sample.summary1">URLからFigmaへ変換</td>
+                  <td class="px-4 py-3"><code class="text-xs">jobSpec.v1</code></td>
+                  <td class="px-4 py-3">2026-03-04</td>
+                </tr>
+                <tr class="border-t border-border-dark">
+                  <td class="px-4 py-3">integration_hub.phase1.sync_project_assets</td>
+                  <td class="px-4 py-3" data-i18n="ui.jobs.sample.summary2">アセット同期</td>
+                  <td class="px-4 py-3"><code class="text-xs">jobSpec.v1</code></td>
+                  <td class="px-4 py-3">2026-03-03</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-6 rounded-lg border border-dashed border-border-dark p-6 text-center">
+            <p class="text-sm font-semibold" data-i18n="ui.jobs.empty.title">ジョブがまだありません</p>
+            <p class="mt-1 text-xs text-text-muted" data-i18n="ui.jobs.empty.desc">ジョブ定義を追加するとここに表示されます。</p>
+          </div>
         </section>
       </div>
     </main>

@@ -105,13 +105,150 @@
 
       <div class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8">
         <section class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-6">
-          <h1 class="text-xl font-bold" data-i18n="ui.connection.h1">connection</h1>
-          <p class="mt-2 text-sm text-text-muted" data-i18n="ui.connection.stub">This page is a UI stub.</p>
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 class="text-xl font-bold" data-i18n="ui.connection.h1">接続詳細</h1>
+              <p class="mt-2 text-sm text-text-muted" data-i18n="ui.connection.desc">接続情報、権限、操作を確認します。</p>
+            </div>
+            <span id="connection-status-badge" class="inline-flex px-2 py-1 rounded-full text-xs bg-slate-500/15 text-slate-400">-</span>
+          </div>
+
+          <div id="connection-feedback" class="mt-4 text-sm text-text-muted" data-i18n="common.loading">読み込み中</div>
+          <button id="connection-retry" class="mt-2 px-3 py-2 rounded-lg border border-border-dark text-sm hover:bg-slate-100 dark:hover:bg-background-dark/80 hidden" type="button" data-i18n="common.retry">
+            再試行
+          </button>
+
+          <div class="mt-6 grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <section class="rounded-lg border border-border-dark p-4">
+              <h2 class="text-sm font-semibold" data-i18n="ui.connection.section.provider">Provider情報</h2>
+              <dl class="mt-3 grid grid-cols-[120px_1fr] gap-y-2 text-sm">
+                <dt class="text-text-muted" data-i18n="ui.connection.field.key">key</dt><dd id="connection-key">-</dd>
+                <dt class="text-text-muted" data-i18n="ui.connection.field.id">id</dt><dd id="connection-id">-</dd>
+                <dt class="text-text-muted" data-i18n="ui.connection.field.connected">connected</dt><dd id="connection-connected">-</dd>
+                <dt class="text-text-muted" data-i18n="ui.connection.field.updatedAt">updated_at</dt><dd id="connection-updated-at">-</dd>
+              </dl>
+            </section>
+            <section class="rounded-lg border border-border-dark p-4">
+              <h2 class="text-sm font-semibold" data-i18n="ui.connection.section.scope">Scope</h2>
+              <p class="mt-3 text-sm" data-i18n="common.notAvailable">利用不可</p>
+            </section>
+            <section class="rounded-lg border border-border-dark p-4">
+              <h2 class="text-sm font-semibold" data-i18n="ui.connection.section.secrets">Secrets (masked)</h2>
+              <dl class="mt-3 grid grid-cols-[140px_1fr] gap-y-2 text-sm">
+                <dt class="text-text-muted">ai.apiKey</dt><dd>••••</dd>
+                <dt class="text-text-muted">github.token</dt><dd>••••</dd>
+                <dt class="text-text-muted">figma.token</dt><dd>••••</dd>
+              </dl>
+            </section>
+          </div>
+
+          <section class="mt-4 rounded-lg border border-border-dark p-4">
+            <h2 class="text-sm font-semibold" data-i18n="ui.connection.section.actions">Actions</h2>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button type="button" disabled class="px-3 py-2 rounded-lg border border-border-dark text-sm opacity-50 cursor-not-allowed" data-i18n="ui.connection.action.reauth">
+                再認証
+              </button>
+              <button type="button" disabled class="px-3 py-2 rounded-lg border border-amber-500/40 text-amber-600 text-sm opacity-50 cursor-not-allowed" data-i18n="ui.connection.action.disable">
+                無効化
+              </button>
+              <button type="button" disabled class="px-3 py-2 rounded-lg border border-rose-500/40 text-rose-600 text-sm opacity-50 cursor-not-allowed" data-i18n="ui.connection.action.delete">
+                削除
+              </button>
+            </div>
+            <p class="mt-3 text-xs text-text-muted" data-i18n="ui.connection.actionsDisabled">この環境ではActionsは未実装です。</p>
+          </section>
+
+          <div class="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4 text-xs text-text-muted">
+            <p data-i18n="ui.connection.notice">注意: 接続の変更は実行ジョブに影響するため、運用時間外での実施を推奨します。</p>
+          </div>
         </section>
       </div>
     </main>
 
     <script src="/ui/sidebar.js"></script>
     <script src="/ui/i18n/i18n.js" defer></script>
+    <script type="module">
+      import { apiGet, setText, t } from "/ui/api.js";
+
+      const params = new URLSearchParams(window.location.search || "");
+      const selectedKey = (params.get("key") || "").trim();
+      const selectedId = (params.get("id") || "").trim();
+
+      const feedback = document.getElementById("connection-feedback");
+      const retry = document.getElementById("connection-retry");
+      const badge = document.getElementById("connection-status-badge");
+
+      function setValue(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = value || "-";
+      }
+
+      function setStatus(connected) {
+        if (!badge) return;
+        badge.classList.remove("bg-emerald-500/15", "text-emerald-500", "bg-rose-500/15", "text-rose-500", "bg-slate-500/15", "text-slate-400");
+        if (connected === true) {
+          badge.classList.add("bg-emerald-500/15", "text-emerald-500");
+          badge.textContent = "connected";
+        } else if (connected === false) {
+          badge.classList.add("bg-rose-500/15", "text-rose-500");
+          badge.textContent = "disconnected";
+        } else {
+          badge.classList.add("bg-slate-500/15", "text-slate-400");
+          badge.textContent = "-";
+        }
+      }
+
+      function matchConnection(item) {
+        if (!item) return false;
+        if (selectedKey && String(item.key || "") === selectedKey) return true;
+        if (selectedId && String(item.id || "") === selectedId) return true;
+        return false;
+      }
+
+      function renderItem(item, updatedAt) {
+        setValue("connection-key", String(item.key || "-"));
+        setValue("connection-id", String(item.id || "-"));
+        setValue("connection-connected", item.connected === true ? "true" : "false");
+        setValue("connection-updated-at", String(updatedAt || "-"));
+        setStatus(Boolean(item.connected));
+      }
+
+      async function loadConnection() {
+        retry.classList.add("hidden");
+        await setText(feedback, "common.loading", true);
+        setStatus(null);
+
+        if (!selectedKey && !selectedId) {
+          const err = await t("common.error");
+          const msg = await t("ui.connection.missingSelector");
+          feedback.textContent = `${err}: ${msg}`;
+          retry.classList.remove("hidden");
+          return;
+        }
+
+        try {
+          const payload = await apiGet("/connections");
+          const items = Array.isArray(payload && payload.items) ? payload.items : [];
+          const found = items.find(matchConnection);
+          if (!found) {
+            const err = await t("common.error");
+            const msg = await t("ui.connection.notFound");
+            feedback.textContent = `${err}: ${msg}`;
+            retry.classList.remove("hidden");
+            return;
+          }
+          renderItem(found, payload && payload.updated_at ? payload.updated_at : "-");
+          feedback.textContent = "";
+        } catch (error) {
+          const err = await t("common.error");
+          feedback.textContent = `${err}: ${error && error.message ? error.message : "unknown"}`;
+          retry.classList.remove("hidden");
+        }
+      }
+
+      retry.addEventListener("click", loadConnection);
+      loadConnection();
+    </script>
   </body>
 </html>
