@@ -4,6 +4,17 @@ const os = require('os');
 const { spawn } = require('child_process');
 const { applyCodexPrompt } = require('../codex/prompt');
 const { buildErrorBody } = require('./errors');
+const {
+  CONNECTION_SCHEMA_VERSION,
+  hasValue,
+  tokenNote,
+  secretMeta,
+  readConnections,
+  readConnectorsCatalog,
+  getConnectionsUpdatedAt,
+  getConnectionsResponseBody,
+  updateConnections
+} = require('./connectionsStore');
 const { initDB } = require('../db');
 const {
   validateName,
@@ -32,10 +43,6 @@ const RUNS_DIR = path.join(ROOT_DIR, '.ai-runs');
 const scriptsDir = path.join(ROOT_DIR, 'scripts');
 const runJobScript = path.join(scriptsDir, 'run-job.js');
 const connectorSmokeScript = path.relative(process.cwd(), path.join(scriptsDir, 'connector-smoke.js'));
-const connectionsDataDir = path.join(ROOT_DIR, 'apps', 'hub', 'data');
-const connectionsDataPath = path.join(connectionsDataDir, 'connections.json');
-const connectorsCatalogPath = path.join(ROOT_DIR, 'apps', 'hub', 'data', 'connectors.catalog.json');
-const CONNECTION_SCHEMA_VERSION = '1.0';
 const appDb = initDB();
 // Quick smoke test: node server.js → curl -I http://127.0.0.1:3000/jobs
 
@@ -159,174 +166,6 @@ function handleProjectsPage(res, method) {
   res.writeHead(404, { 'Content-Type': 'text/plain' });
   res.end('Projects UI not found');
 }
-
-function createEmptyConnections() {
-  return {
-    ai: { provider: '', name: '', apiKey: '' },
-    github: { repo: '', token: '' },
-    figma: { fileUrl: '', token: '' }
-  };
-}
-
-function coerceString(value) {
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function normalizeConnectionsPayload(payload = {}) {
-  return {
-    ai: {
-      provider: coerceString(payload.ai?.provider),
-      name: coerceString(payload.ai?.name),
-      apiKey: coerceString(payload.ai?.apiKey)
-    },
-    github: {
-      repo: coerceString(payload.github?.repo),
-      token: coerceString(payload.github?.token)
-    },
-    figma: {
-      fileUrl: coerceString(payload.figma?.fileUrl),
-      token: coerceString(payload.figma?.token)
-    }
-  };
-}
-
-function mergeConnectionSecrets(existing, incoming) {
-  const merged = JSON.parse(JSON.stringify(incoming));
-  if (!hasValue(merged.ai?.apiKey) && hasValue(existing.ai?.apiKey)) {
-    merged.ai.apiKey = existing.ai.apiKey;
-  }
-  if (!hasValue(merged.github?.token) && hasValue(existing.github?.token)) {
-    merged.github.token = existing.github.token;
-  }
-  if (!hasValue(merged.figma?.token) && hasValue(existing.figma?.token)) {
-    merged.figma.token = existing.figma.token;
-  }
-  return merged;
-}
-
-function tokenNote(label, value) {
-  if (!hasValue(value)) {
-    return `${label}: missing`;
-  }
-  return `${label}: present len=${String(value).length}`;
-}
-
-function secretMeta(value) {
-  const present = hasValue(value);
-  return {
-    has_secret: present,
-    secret_len: present ? String(value).length : 0
-  };
-}
-
-function buildConnectionItems(connections, updatedAt) {
-  const items = [
-    {
-      schema_version: CONNECTION_SCHEMA_VERSION,
-      id: 'conn-ai',
-      key: 'ai',
-      name: 'AI Provider',
-      enabled: hasValue(connections.ai?.provider) || hasValue(connections.ai?.name) || hasValue(connections.ai?.apiKey),
-      connected: hasValue(connections.ai?.apiKey),
-      last_checked_at: updatedAt,
-      ...secretMeta(connections.ai?.apiKey),
-      notes: [tokenNote('api_key', connections.ai?.apiKey), `provider=${connections.ai?.provider || '(none)'}`]
-    },
-    {
-      schema_version: CONNECTION_SCHEMA_VERSION,
-      id: 'conn-github',
-      key: 'github',
-      name: 'GitHub',
-      enabled: hasValue(connections.github?.repo) || hasValue(connections.github?.token),
-      connected: hasValue(connections.github?.token),
-      last_checked_at: updatedAt,
-      ...secretMeta(connections.github?.token),
-      notes: [tokenNote('token', connections.github?.token), `repo=${connections.github?.repo || '(none)'}`]
-    },
-    {
-      schema_version: CONNECTION_SCHEMA_VERSION,
-      id: 'conn-figma',
-      key: 'figma',
-      name: 'Figma',
-      enabled: hasValue(connections.figma?.fileUrl) || hasValue(connections.figma?.token),
-      connected: hasValue(connections.figma?.token),
-      last_checked_at: updatedAt,
-      ...secretMeta(connections.figma?.token),
-      notes: [tokenNote('token', connections.figma?.token), `file_url=${connections.figma?.fileUrl || '(none)'}`]
-    }
-  ];
-  return items;
-}
-
-function sanitizeConnectionsForGet(connections) {
-  return {
-    ai: {
-      provider: connections.ai?.provider || '',
-      name: connections.ai?.name || '',
-      apiKey: ''
-    },
-    github: {
-      repo: connections.github?.repo || '',
-      token: ''
-    },
-    figma: {
-      fileUrl: connections.figma?.fileUrl || '',
-      token: ''
-    }
-  };
-}
-
-function readConnections() {
-  if (!fileExists(connectionsDataPath)) {
-    return createEmptyConnections();
-  }
-  try {
-    const raw = fs.readFileSync(connectionsDataPath, 'utf8');
-    return normalizeConnectionsPayload(JSON.parse(raw));
-  } catch (error) {
-    console.warn('Failed to read connections.json, returning defaults:', error.message);
-    return createEmptyConnections();
-  }
-}
-
-function writeConnections(data) {
-  fs.mkdirSync(connectionsDataDir, { recursive: true });
-  fs.writeFileSync(connectionsDataPath, JSON.stringify(data, null, 2), 'utf8');
-}
-
-function readConnectorsCatalog() {
-  if (!fileExists(connectorsCatalogPath)) {
-    return [];
-  }
-  try {
-    const raw = fs.readFileSync(connectorsCatalogPath, 'utf8');
-    if (!raw.trim()) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.warn('Failed to read connectors catalog:', error.message);
-    return [];
-  }
-}
-
-function getConnectionsUpdatedAt() {
-  if (!fileExists(connectionsDataPath)) {
-    return null;
-  }
-  try {
-    const stats = fs.statSync(connectionsDataPath);
-    return stats.mtime.toISOString();
-  } catch {
-    return null;
-  }
-}
-
-function hasValue(value) {
-  return typeof value === 'string' && value.length > 0;
-}
-
 function computeConnectorStatus(providerKey, connections, updatedAt) {
   let configured = false;
   switch (providerKey) {
@@ -862,34 +701,32 @@ async function handleConnectionsApi(req, res, method) {
   if (method === 'GET') {
     const data = readConnections();
     const updatedAt = getConnectionsUpdatedAt();
-    sendJson(res, 200, {
-      schema_version: CONNECTION_SCHEMA_VERSION,
-      ...sanitizeConnectionsForGet(data),
-      items: buildConnectionItems(data, updatedAt),
-      updated_at: updatedAt
-    });
+    sendJson(res, 200, getConnectionsResponseBody(data, updatedAt));
     return;
   }
-  if (method === 'POST') {
+  if (method === 'PUT' || method === 'POST') {
     let payload = {};
     try {
       payload = await parseJsonBody(req);
-    } catch (error) {
-      sendJson(res, 400, { error: 'Invalid JSON body' });
+    } catch {
+      sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSONが不正です', { failure_code: 'validation_error' });
       return;
     }
     try {
-      const existing = readConnections();
-      const normalized = normalizeConnectionsPayload(payload);
-      writeConnections(mergeConnectionSecrets(existing, normalized));
-      sendJson(res, 200, { ok: true });
+      const updated = updateConnections(payload);
+      sendJson(res, 200, updated.body);
     } catch (error) {
-      console.error('Failed to save connections:', error);
-      sendJson(res, 500, { error: 'Failed to save connections' });
+      sendJsonError(
+        res,
+        error.status || 400,
+        error.code || 'VALIDATION_ERROR',
+        error.message || '入力が不正です',
+        error.details || { failure_code: error.failure_code || 'validation_error' }
+      );
     }
     return;
   }
-  sendJson(res, 405, { error: 'Method not allowed' });
+  sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed', { failure_code: 'validation_error' });
 }
 
 async function handleConnectorsApi(req, res, method) {

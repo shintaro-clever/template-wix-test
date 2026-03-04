@@ -30,133 +30,26 @@ const { requireAuth } = require("../middleware/auth");
 const { validateEnv } = require("../auth/config");
 const { logRequest } = require("../middleware/requestLog");
 const { executeLocalRun } = require("../runner/localRunner");
+const {
+  CONNECTION_SCHEMA_VERSION,
+  hasValue,
+  tokenNote,
+  secretMeta,
+  readConnections,
+  readConnectorsCatalog,
+  getConnectionsUpdatedAt,
+  getConnectionsResponseBody,
+  updateConnections,
+  sanitizeConnectionsPayloadForLog,
+} = require("./connectionsStore");
 
 const ROOT_DIR = path.join(__dirname, "..", "..");
 const RUNS_DIR = path.join(ROOT_DIR, ".ai-runs");
 const runJobScript = path.join(ROOT_DIR, "scripts", "run-job.js");
-const connectionsDataPath = path.join(ROOT_DIR, "apps", "hub", "data", "connections.json");
-const connectorsCatalogPath = path.join(ROOT_DIR, "apps", "hub", "data", "connectors.catalog.json");
-const CONNECTION_SCHEMA_VERSION = "1.0";
 const INLINE_RUNNER_TIMEOUT_MS = Number(process.env.RUNNER_TIMEOUT_MS || 45000);
 
 function isServiceUnavailableError(error) {
   return Boolean(error && error.status === 503 && error.failure_code === "service_unavailable");
-}
-
-function hasValue(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-function tokenNote(label, value) {
-  if (!hasValue(value)) return `${label}: missing`;
-  return `${label}: present len=${String(value).length}`;
-}
-
-function secretMeta(value) {
-  const present = hasValue(value);
-  return {
-    has_secret: present,
-    secret_len: present ? String(value).length : 0,
-  };
-}
-
-function createEmptyConnections() {
-  return {
-    ai: { provider: "", name: "", apiKey: "" },
-    github: { repo: "", token: "" },
-    figma: { fileUrl: "", token: "" },
-  };
-}
-
-function readConnections() {
-  if (!fs.existsSync(connectionsDataPath)) {
-    return createEmptyConnections();
-  }
-  try {
-    const raw = fs.readFileSync(connectionsDataPath, "utf8");
-    const parsed = JSON.parse(raw);
-    return {
-      ai: {
-        provider: typeof parsed.ai?.provider === "string" ? parsed.ai.provider.trim() : "",
-        name: typeof parsed.ai?.name === "string" ? parsed.ai.name.trim() : "",
-        apiKey: typeof parsed.ai?.apiKey === "string" ? parsed.ai.apiKey.trim() : "",
-      },
-      github: {
-        repo: typeof parsed.github?.repo === "string" ? parsed.github.repo.trim() : "",
-        token: typeof parsed.github?.token === "string" ? parsed.github.token.trim() : "",
-      },
-      figma: {
-        fileUrl: typeof parsed.figma?.fileUrl === "string" ? parsed.figma.fileUrl.trim() : "",
-        token: typeof parsed.figma?.token === "string" ? parsed.figma.token.trim() : "",
-      },
-    };
-  } catch {
-    return createEmptyConnections();
-  }
-}
-
-function getConnectionsUpdatedAt() {
-  if (!fs.existsSync(connectionsDataPath)) return null;
-  try {
-    return fs.statSync(connectionsDataPath).mtime.toISOString();
-  } catch {
-    return null;
-  }
-}
-
-function readConnectorsCatalog() {
-  if (!fs.existsSync(connectorsCatalogPath)) return [];
-  try {
-    const parsed = JSON.parse(fs.readFileSync(connectorsCatalogPath, "utf8"));
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function isConnected(providerKey, connections) {
-  if (providerKey === "ai") return hasValue(connections.ai?.apiKey);
-  if (providerKey === "github") return hasValue(connections.github?.token);
-  if (providerKey === "figma") return hasValue(connections.figma?.token);
-  return false;
-}
-
-function buildConnectionItems(connections, updatedAt) {
-  return [
-    {
-      schema_version: CONNECTION_SCHEMA_VERSION,
-      id: "conn-ai",
-      key: "ai",
-      name: "AI Provider",
-      enabled: hasValue(connections.ai?.provider) || hasValue(connections.ai?.name) || hasValue(connections.ai?.apiKey),
-      connected: hasValue(connections.ai?.apiKey),
-      last_checked_at: updatedAt,
-      ...secretMeta(connections.ai?.apiKey),
-      notes: [tokenNote("api_key", connections.ai?.apiKey), `provider=${connections.ai?.provider || "(none)"}`],
-    },
-    {
-      schema_version: CONNECTION_SCHEMA_VERSION,
-      id: "conn-github",
-      key: "github",
-      name: "GitHub",
-      enabled: hasValue(connections.github?.repo) || hasValue(connections.github?.token),
-      connected: hasValue(connections.github?.token),
-      last_checked_at: updatedAt,
-      ...secretMeta(connections.github?.token),
-      notes: [tokenNote("token", connections.github?.token), `repo=${connections.github?.repo || "(none)"}`],
-    },
-    {
-      schema_version: CONNECTION_SCHEMA_VERSION,
-      id: "conn-figma",
-      key: "figma",
-      name: "Figma",
-      enabled: hasValue(connections.figma?.fileUrl) || hasValue(connections.figma?.token),
-      connected: hasValue(connections.figma?.token),
-      last_checked_at: updatedAt,
-      ...secretMeta(connections.figma?.token),
-      notes: [tokenNote("token", connections.figma?.token), `file_url=${connections.figma?.fileUrl || "(none)"}`],
-    },
-  ];
 }
 
 function sanitizeRunnerMeta(meta = {}) {
@@ -602,7 +495,14 @@ function createApiServer(dbConn) {
           schema_version: CONNECTION_SCHEMA_VERSION,
           key: item.provider_key,
           enabled: true,
-          connected: isConnected(item.provider_key, connections),
+          connected:
+            item.provider_key === "ai"
+              ? hasValue(connections.ai?.apiKey)
+              : item.provider_key === "github"
+                ? hasValue(connections.github?.token)
+                : item.provider_key === "figma"
+                  ? hasValue(connections.figma?.token)
+                  : false,
           last_checked_at: updatedAt,
           ...(item.provider_key === "ai"
             ? secretMeta(connections.ai?.apiKey)
@@ -623,30 +523,36 @@ function createApiServer(dbConn) {
       }
 
       if (urlPath === "/api/connections") {
-        if (method !== "GET") {
+        if (method === "GET") {
+          const connections = readConnections();
+          const updatedAt = getConnectionsUpdatedAt();
+          return sendJson(res, 200, getConnectionsResponseBody(connections, updatedAt));
+        }
+        if (method !== "PUT" && method !== "POST") {
           res.writeHead(405, { "Content-Type": "text/plain; charset=utf-8" });
           return res.end("Method not allowed");
         }
-        const connections = readConnections();
-        const updatedAt = getConnectionsUpdatedAt();
-        return sendJson(res, 200, {
-          schema_version: CONNECTION_SCHEMA_VERSION,
-          ai: {
-            provider: connections.ai?.provider || "",
-            name: connections.ai?.name || "",
-            apiKey: "",
-          },
-          github: {
-            repo: connections.github?.repo || "",
-            token: "",
-          },
-          figma: {
-            fileUrl: connections.figma?.fileUrl || "",
-            token: "",
-          },
-          items: buildConnectionItems(connections, updatedAt),
-          updated_at: updatedAt,
-        });
+        let body;
+        try {
+          body = await readJsonBody(req);
+        } catch {
+          return jsonError(res, 400, "VALIDATION_ERROR", "JSONが不正です", {
+            failure_code: "validation_error",
+          });
+        }
+        req._logBody = sanitizeConnectionsPayloadForLog(body);
+        try {
+          const updated = updateConnections(body);
+          return sendJson(res, 200, updated.body);
+        } catch (error) {
+          return jsonError(
+            res,
+            error.status || 400,
+            error.code || "VALIDATION_ERROR",
+            error.message || "入力が不正です",
+            error.details || { failure_code: error.failure_code || "validation_error" }
+          );
+        }
       }
 
       // GET/HEAD /api/projects

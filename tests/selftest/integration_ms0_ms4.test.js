@@ -126,6 +126,61 @@ async function run() {
   assert(!connections.github?.token, "connections GET should not expose github token");
   assert(!connections.figma?.token, "connections GET should not expose figma token");
 
+  const putConnectionsRes = await requestLocal(handler, {
+    method: "PUT",
+    url: "/api/connections",
+    headers: { Authorization: token, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ai: { provider: "openai", name: "primary", apiKey: "sk-test-key" },
+      github: { repo: "owner/repo", token: "ghp_test_token" },
+      figma: { fileUrl: "https://www.figma.com/file/abc123/Example", token: "figd_test_token" },
+      items: [{ key: "ai", enabled: true }],
+    }),
+  });
+  assert(putConnectionsRes.statusCode === 200, "PUT /api/connections should return 200");
+  const putConnections = JSON.parse(putConnectionsRes.body.toString("utf8"));
+  assert(putConnections.updated_at, "PUT /api/connections should update updated_at");
+  assert(putConnections.ai?.provider === "openai", "PUT should update ai.provider");
+  assert(putConnections.github?.repo === "owner/repo", "PUT should update github.repo");
+  assert(!putConnections.ai?.apiKey, "PUT response should not expose ai apiKey");
+  assert(!putConnections.github?.token, "PUT response should not expose github token");
+  assert(!putConnections.figma?.token, "PUT response should not expose figma token");
+  const aiItem = Array.isArray(putConnections.items)
+    ? putConnections.items.find((row) => row.key === "ai")
+    : null;
+  assert(aiItem && aiItem.has_secret === true, "items.has_secret should reflect stored secret");
+  assert(aiItem && aiItem.secret_len === "sk-test-key".length, "items.secret_len should reflect stored secret");
+
+  const getAfterPutRes = await requestLocal(handler, {
+    method: "GET",
+    url: "/api/connections",
+    headers: { Authorization: token },
+  });
+  assert(getAfterPutRes.statusCode === 200, "GET /api/connections after PUT should return 200");
+  const getAfterPut = JSON.parse(getAfterPutRes.body.toString("utf8"));
+  assert(getAfterPut.ai?.provider === "openai", "GET after PUT should reflect ai.provider");
+  assert(getAfterPut.github?.repo === "owner/repo", "GET after PUT should reflect github.repo");
+  assert(getAfterPut.figma?.fileUrl === "https://www.figma.com/file/abc123/Example", "GET after PUT should reflect figma.fileUrl");
+  assert(
+    typeof connections.updated_at === "string" ? getAfterPut.updated_at !== connections.updated_at : !!getAfterPut.updated_at,
+    "GET after PUT should have updated updated_at"
+  );
+
+  const badPutRes = await requestLocal(handler, {
+    method: "PUT",
+    url: "/api/connections",
+    headers: { Authorization: token, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ai: { provider: 123 },
+    }),
+  });
+  assert(badPutRes.statusCode === 400, "invalid PUT /api/connections should return 400");
+  const badPutBody = JSON.parse(badPutRes.body.toString("utf8"));
+  assert(typeof badPutBody.message === "string", "validation error should include message");
+  assert(typeof badPutBody.message_en === "string", "validation error should include message_en");
+  assert(badPutBody.details && typeof badPutBody.details === "object", "validation error should include details");
+  assert(badPutBody.details.failure_code === "validation_error", "validation error should include details.failure_code");
+
   const createRes = await requestLocal(handler, {
     method: "POST",
     url: "/api/projects",
