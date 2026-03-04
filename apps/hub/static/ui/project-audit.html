@@ -1,4 +1,40 @@
-<aside class="w-64 flex-shrink-0 border-r border-primary/10 bg-background-dark flex flex-col h-screen">
+<!DOCTYPE html>
+<html class="dark" lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>AI Orchestrator - project-audit</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#a55c50",
+              "background-light": "#f7f6f6",
+              "background-dark": "#1d1615",
+              "card-dark": "#251f1e",
+              "border-dark": "#3d3432",
+              "text-muted": "#b1a7a5"
+            },
+            fontFamily: { display: ["Inter", "Noto Sans JP", "sans-serif"] }
+          }
+        }
+      };
+    </script>
+    <style>
+      body { font-family: "Inter", "Noto Sans JP", sans-serif; }
+      .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #3d3432; border-radius: 10px; }
+    </style>
+  </head>
+  <body data-page="projects" class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex overflow-hidden">
+    <!-- PAGE_TITLE_KEY: ui.project_audit.title -->
+
+    <aside class="w-64 flex-shrink-0 border-r border-primary/10 bg-background-dark flex flex-col h-screen">
   <div class="p-6 flex items-center gap-3">
     <div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-white">
       <span class="material-symbols-outlined text-xl">auto_fix</span>
@@ -18,24 +54,6 @@
       <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/projects.html">
         <span class="material-symbols-outlined">folder</span>
         <span class="text-sm font-medium" data-i18n="nav.projects">プロジェクト</span>
-      </a>
-      <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 pl-10 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/runs.html">
-        <span class="text-sm font-medium" data-i18n="nav.runs">実行一覧</span>
-      </a>
-      <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 pl-10 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/jobs.html">
-        <span class="text-sm font-medium" data-i18n="nav.jobs">ジョブ一覧</span>
-      </a>
-      <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 pl-10 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/connections.html">
-        <span class="text-sm font-medium" data-i18n="nav.connections">接続一覧</span>
-      </a>
-      <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 pl-10 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/project-members.html">
-        <span class="text-sm font-medium" data-i18n="nav.members">メンバー</span>
-      </a>
-      <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 pl-10 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/project-invites.html">
-        <span class="text-sm font-medium" data-i18n="nav.invites">招待</span>
-      </a>
-      <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 pl-10 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/project-audit.html">
-        <span class="text-sm font-medium" data-i18n="nav.audit">監査ログ</span>
       </a>
 
       <a data-nav-key="analytics" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/analytics.html">
@@ -78,3 +96,22 @@
     </div>
   </div>
 </aside>
+
+    <main class="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
+      <header class="h-16 border-b border-border-dark px-8 flex items-center justify-between bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md z-10">
+  <h2 class="text-xl font-bold"><span data-i18n="ui.project_audit.title">ui.project_audit.title</span></h2>
+  
+</header>
+
+      <div class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8">
+        <section class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-6">
+          <h1 class="text-xl font-bold" data-i18n="ui.project_audit.h1">project-audit</h1>
+          <p class="mt-2 text-sm text-text-muted" data-i18n="ui.project_audit.stub">This page is a UI stub.</p>
+        </section>
+      </div>
+    </main>
+
+    <script src="/ui/sidebar.js"></script>
+    <script src="/ui/i18n/i18n.js" defer></script>
+  </body>
+</html>
