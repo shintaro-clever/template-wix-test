@@ -6,6 +6,7 @@ const connectionsDataDir = path.join(ROOT_DIR, "apps", "hub", "data");
 const connectionsDataPath = path.join(connectionsDataDir, "connections.json");
 const connectorsCatalogPath = path.join(ROOT_DIR, "apps", "hub", "data", "connectors.catalog.json");
 const CONNECTION_SCHEMA_VERSION = "1.0";
+const ALLOWED_CONNECTION_KEYS = new Set(["ai", "github", "figma"]);
 
 function hasValue(value) {
   return typeof value === "string" && value.trim().length > 0;
@@ -24,22 +25,32 @@ function coerceString(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function normalizeItemKey(value) {
+  if (typeof value !== "string") return "";
+  return value.trim();
+}
+
+function isAllowedConnectionKey(key) {
+  return ALLOWED_CONNECTION_KEYS.has(key);
+}
+
 function normalizeConnectionsPayload(payload = {}) {
   const itemEnabled = {};
   if (Array.isArray(payload.items)) {
     payload.items.forEach((item) => {
       if (!item || typeof item !== "object" || Array.isArray(item)) return;
-      const key = typeof item.key === "string" ? item.key.trim() : "";
-      if (!key) return;
+      const key = normalizeItemKey(item.key);
+      if (!isAllowedConnectionKey(key)) return;
       if (typeof item.enabled !== "boolean") return;
       itemEnabled[key] = item.enabled;
     });
   }
   if (payload.item_enabled && typeof payload.item_enabled === "object" && !Array.isArray(payload.item_enabled)) {
     Object.entries(payload.item_enabled).forEach(([key, enabled]) => {
-      if (typeof key !== "string" || !key.trim()) return;
+      const normalizedKey = normalizeItemKey(key);
+      if (!isAllowedConnectionKey(normalizedKey)) return;
       if (typeof enabled !== "boolean") return;
-      itemEnabled[key.trim()] = enabled;
+      itemEnabled[normalizedKey] = enabled;
     });
   }
   return {
@@ -224,8 +235,12 @@ function applyConnectionsUpdate(existing, payload) {
       if (!item || typeof item !== "object" || Array.isArray(item)) {
         throw validationError("items entry must be object", { field: `items[${index}]` });
       }
-      if (typeof item.key !== "string" || !item.key.trim()) {
+      const key = normalizeItemKey(item.key);
+      if (!key) {
         throw validationError("items[].key must be string", { field: `items[${index}].key` });
+      }
+      if (!isAllowedConnectionKey(key)) {
+        throw validationError("items[].key must be one of ai/github/figma", { field: `items[${index}].key` });
       }
       if (item.enabled !== undefined && typeof item.enabled !== "boolean") {
         throw validationError("items[].enabled must be boolean", { field: `items[${index}].enabled` });
@@ -249,7 +264,7 @@ function applyConnectionsUpdate(existing, payload) {
   }
   if (Array.isArray(payload.items)) {
     payload.items.forEach((item) => {
-      const key = item.key.trim();
+      const key = normalizeItemKey(item.key);
       if (item.enabled !== undefined) {
         next.item_enabled[key] = item.enabled;
       }

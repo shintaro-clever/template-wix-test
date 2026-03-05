@@ -188,6 +188,60 @@ async function run() {
   assert(typeof badPutBody.message_en === "string", "validation error should include message_en");
   assert(badPutBody.details && typeof badPutBody.details === "object", "validation error should include details");
   assert(badPutBody.details.failure_code === "validation_error", "validation error should include details.failure_code");
+  const badKeyPutRes = await requestLocal(handler, {
+    method: "PUT",
+    url: "/api/connections",
+    headers: { Authorization: token, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      items: [{ key: "githubh", enabled: true }],
+    }),
+  });
+  assert(badKeyPutRes.statusCode === 400, "unknown items[].key should return 400");
+  const badKeyPutBody = JSON.parse(badKeyPutRes.body.toString("utf8"));
+  assert(
+    badKeyPutBody.details &&
+      (badKeyPutBody.details.code === "VALIDATION_ERROR" || badKeyPutBody.details.failure_code === "validation_error"),
+    "unknown items[].key should be validation_error compatible"
+  );
+
+  const projectsListInitialRes = await requestLocal(handler, {
+    method: "GET",
+    url: "/api/projects",
+    headers: { Authorization: token },
+  });
+  assert(projectsListInitialRes.statusCode === 200, "projects list should return 200");
+  const projectsListInitial = JSON.parse(projectsListInitialRes.body.toString("utf8"));
+  assert(Array.isArray(projectsListInitial.projects), "projects list should include projects array");
+  if (projectsListInitial.projects.length > 0) {
+    const first = projectsListInitial.projects[0];
+    assert(typeof first.project_id === "string" && first.project_id.length > 0, "project row should include project_id");
+    const firstDetailRes = await requestLocal(handler, {
+      method: "GET",
+      url: `/api/projects/${encodeURIComponent(first.project_id)}`,
+      headers: { Authorization: token },
+    });
+    assert(firstDetailRes.statusCode === 200, "project detail should return 200 for existing project_id");
+  }
+
+  const badProjectCreateRes = await requestLocal(handler, {
+    method: "POST",
+    url: "/api/projects",
+    headers: { Authorization: token, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "", staging_url: "http://invalid.example.com" }),
+  });
+  assert(badProjectCreateRes.statusCode === 400, "invalid project create should return 400");
+  const badProjectCreateBody = JSON.parse(badProjectCreateRes.body.toString("utf8"));
+  assert(typeof badProjectCreateBody.message === "string", "project validation error should include message");
+  assert(typeof badProjectCreateBody.message_en === "string", "project validation error should include message_en");
+  assert(
+    badProjectCreateBody.details && typeof badProjectCreateBody.details === "object",
+    "project validation error should include details"
+  );
+  assert(
+    badProjectCreateBody.details.code === "VALIDATION_ERROR" ||
+      badProjectCreateBody.details.failure_code === "validation_error",
+    "project validation error should be validation_error compatible"
+  );
 
   const createRes = await requestLocal(handler, {
     method: "POST",
@@ -199,12 +253,92 @@ async function run() {
   const created = JSON.parse(createRes.body.toString("utf8"));
   assert(created.id, "project id should exist");
 
+  const projectsListRes = await requestLocal(handler, {
+    method: "GET",
+    url: "/api/projects",
+    headers: { Authorization: token },
+  });
+  assert(projectsListRes.statusCode === 200, "projects list should return 200 after create");
+  const projectsList = JSON.parse(projectsListRes.body.toString("utf8"));
+  assert(Array.isArray(projectsList.projects), "projects list should include projects array after create");
+  const listedProject = projectsList.projects.find((row) => row && row.project_id === created.id);
+  assert(!!listedProject, "projects list should include created project");
+
   const readRes = await requestLocal(handler, {
     method: "GET",
     url: `/api/projects/${created.id}`,
     headers: { Authorization: token },
   });
   assert(readRes.statusCode === 200, "project read should return 200");
+  const readProject = JSON.parse(readRes.body.toString("utf8"));
+  assert(readProject.project_id === created.id, "project detail should include project_id");
+
+  const threadsListRes = await requestLocal(handler, {
+    method: "GET",
+    url: `/api/projects/${created.id}/threads`,
+    headers: { Authorization: token },
+  });
+  assert(threadsListRes.statusCode === 200, "threads list should return 200");
+  const threadsList = JSON.parse(threadsListRes.body.toString("utf8"));
+  assert(Array.isArray(threadsList.threads), "threads list should include threads array");
+
+  const threadId = `thr-${crypto.randomUUID()}`;
+  const threadNow = new Date().toISOString();
+  db.prepare(
+    "INSERT INTO project_threads(tenant_id,id,project_id,title,created_at,updated_at) VALUES(?,?,?,?,?,?)"
+  ).run(DEFAULT_TENANT, threadId, created.id, "General", threadNow, threadNow);
+
+  const threadDetailRes = await requestLocal(handler, {
+    method: "GET",
+    url: `/api/threads/${threadId}`,
+    headers: { Authorization: token },
+  });
+  assert(threadDetailRes.statusCode === 200, "thread detail should return 200");
+  const threadDetail = JSON.parse(threadDetailRes.body.toString("utf8"));
+  assert(threadDetail.thread && threadDetail.thread.thread_id === threadId, "thread detail should include thread_id");
+  assert(Array.isArray(threadDetail.thread.messages), "thread detail should include messages array");
+
+  const postMessageRes = await requestLocal(handler, {
+    method: "POST",
+    url: `/api/threads/${threadId}/messages`,
+    headers: { Authorization: token, "Content-Type": "application/json" },
+    body: JSON.stringify({ body: "hello thread" }),
+  });
+  assert(postMessageRes.statusCode === 201, "thread message post should return 201");
+  const postMessageBody = JSON.parse(postMessageRes.body.toString("utf8"));
+  assert(typeof postMessageBody.message_id === "string" && postMessageBody.message_id.length > 0, "message post should return message_id");
+  const threadDetailAfterPostRes = await requestLocal(handler, {
+    method: "GET",
+    url: `/api/threads/${threadId}`,
+    headers: { Authorization: token },
+  });
+  assert(threadDetailAfterPostRes.statusCode === 200, "thread detail after post should return 200");
+  const threadDetailAfterPost = JSON.parse(threadDetailAfterPostRes.body.toString("utf8"));
+  assert(
+    Array.isArray(threadDetailAfterPost.thread && threadDetailAfterPost.thread.messages) &&
+      threadDetailAfterPost.thread.messages.some((row) => row && row.body === "hello thread"),
+    "message should be reflected in GET /api/threads/:id"
+  );
+
+  const badThreadMessageRes = await requestLocal(handler, {
+    method: "POST",
+    url: `/api/threads/${threadId}/messages`,
+    headers: { Authorization: token, "Content-Type": "application/json" },
+    body: JSON.stringify({ body: "" }),
+  });
+  assert(badThreadMessageRes.statusCode === 400, "invalid thread message post should return 400");
+  const badThreadMessageBody = JSON.parse(badThreadMessageRes.body.toString("utf8"));
+  assert(typeof badThreadMessageBody.message === "string", "thread validation error should include message");
+  assert(typeof badThreadMessageBody.message_en === "string", "thread validation error should include message_en");
+  assert(
+    badThreadMessageBody.details && typeof badThreadMessageBody.details === "object",
+    "thread validation error should include details"
+  );
+  assert(
+    badThreadMessageBody.details.failure_code === "validation_error" ||
+      badThreadMessageBody.details.code === "VALIDATION_ERROR",
+    "thread validation error should be validation_error compatible"
+  );
 
   // capabilityCheck 3 cases
   const template = {
