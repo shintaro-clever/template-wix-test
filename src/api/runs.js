@@ -64,6 +64,32 @@ function listRuns(db) {
   );
 }
 
+function listRunsByProject(db, projectId) {
+  return withRetry(() =>
+    db
+      .prepare(
+        "SELECT id,status,job_type,run_mode,inputs_json,target_path,failure_code,figma_file_key,ingest_artifact_path,github_pr_url,github_pr_number,created_at,updated_at FROM runs WHERE tenant_id=? AND project_id=? ORDER BY created_at DESC"
+      )
+      .all(DEFAULT_TENANT, projectId)
+      .map((row) => ({
+        run_id: row.id,
+        status: row.status,
+        job_type: row.job_type || null,
+        run_mode: row.run_mode || null,
+        inputs: parseInputs(row.inputs_json),
+        target_path: row.target_path || null,
+        artifacts: resolveArtifacts(row.id, row.target_path || null),
+        failure_code: row.failure_code || null,
+        figma_file_key: row.figma_file_key || null,
+        ingest_artifact_path: row.ingest_artifact_path || null,
+        github_pr_url: row.github_pr_url || null,
+        github_pr_number: typeof row.github_pr_number === "number" ? row.github_pr_number : null,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+      }))
+  );
+}
+
 function createRun(
   db,
   { job_type, run_mode, inputs, target_path, project_id = null, figma_file_key = null, ingest_artifact_path = null }
@@ -167,6 +193,7 @@ function markRunFinished(db, runId, { status, failureCode = null }) {
 
 module.exports = {
   listRuns,
+  listRunsByProject,
   getRun,
   createRun,
   claimNextQueuedRun,

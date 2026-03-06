@@ -34,6 +34,37 @@ function normalizeBody(input) {
   return typeof input === "string" ? input.trim() : "";
 }
 
+function normalizeTitle(input) {
+  return typeof input === "string" ? input.trim() : "";
+}
+
+function createThread(db, projectId, title) {
+  const id = normalizeId(projectId);
+  if (!id) throw validationError("project_id is required");
+
+  const normalizedTitle = normalizeTitle(title);
+  if (!normalizedTitle) throw validationError("title is required");
+  if (normalizedTitle.length > 100) throw validationError("title too long (max 100)");
+
+  const project = db
+    .prepare("SELECT id FROM projects WHERE tenant_id = ? AND id = ? LIMIT 1")
+    .get(DEFAULT_TENANT, id);
+  if (!project) {
+    const err = new Error("project not found");
+    err.status = 404; err.code = "NOT_FOUND"; err.failure_code = "not_found";
+    err.details = { failure_code: "not_found" };
+    throw err;
+  }
+
+  const now = nowIso();
+  const threadId = crypto.randomUUID();
+  db.prepare(
+    "INSERT INTO project_threads(tenant_id,id,project_id,title,created_at,updated_at) VALUES(?,?,?,?,?,?)"
+  ).run(DEFAULT_TENANT, threadId, id, normalizedTitle, now, now);
+
+  return { thread_id: threadId, project_id: id, title: normalizedTitle, created_at: now, updated_at: now };
+}
+
 function listThreadsByProject(db, projectId) {
   const id = normalizeId(projectId);
   if (!id) {
@@ -148,6 +179,7 @@ function postMessage(db, threadId, payload = {}, actor = null) {
 }
 
 module.exports = {
+  createThread,
   listThreadsByProject,
   getThread,
   postMessage,

@@ -24,7 +24,7 @@ const {
   patchProject
 } = require('../api/projects');
 const { listProjects, getProjectById } = require('./projectsStore');
-const { listThreadsByProject, getThread, postMessage } = require('./threadsStore');
+const { createThread, listThreadsByProject, getThread, postMessage } = require('./threadsStore');
 const { getProjectConnections, putProjectConnections, getProjectDrive, putProjectDrive } = require('./projectBindingsStore');
 
 const ROOT_DIR = path.join(__dirname, '..', '..');
@@ -1155,6 +1155,23 @@ async function handleRequest(req, res) {
     if (method === 'GET') {
       try {
         sendJson(res, 200, listThreadsByProject(appDb, projectId));
+      } catch (error) {
+        sendJsonError(
+          res,
+          error.status || 400,
+          error.code || 'VALIDATION_ERROR',
+          error.message || '入力が不正です',
+          error.details || { failure_code: error.failure_code || 'validation_error' }
+        );
+      }
+      return;
+    }
+    if (method === 'POST') {
+      let body = {};
+      try { body = await parseJsonBody(req); } catch { sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSONが不正です'); return; }
+      try {
+        const created = createThread(appDb, projectId, body.title);
+        sendJson(res, 201, created);
       } catch (error) {
         sendJsonError(
           res,

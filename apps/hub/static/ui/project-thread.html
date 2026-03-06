@@ -89,6 +89,19 @@
         </button>
       </section>
 
+      <section class="bg-white dark:bg-card-dark p-5 rounded-xl border border-border-dark">
+        <h2 class="text-sm font-semibold" data-i18n="ui.projectThread.section.new">新規スレッド</h2>
+        <div class="mt-3 flex items-center gap-3">
+          <input id="new-thread-title" type="text" maxlength="100"
+            class="flex-1 rounded-lg border border-border-dark bg-background-light dark:bg-background-dark px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+            placeholder="タイトル（必須・最大100文字）" data-i18n-placeholder="ui.projectThread.form.title" />
+          <button id="new-thread-btn" type="button"
+            class="px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed"
+            data-i18n="ui.projectThread.action.create">作成</button>
+        </div>
+        <p id="new-thread-status" class="mt-2 text-xs text-text-muted hidden"></p>
+      </section>
+
       <section class="bg-white dark:bg-card-dark p-5 rounded-xl border border-border-dark overflow-x-auto">
         <h2 class="text-sm font-semibold" data-i18n="ui.projectThread.section.threads">スレッド一覧</h2>
         <table class="mt-3 min-w-full text-sm">
@@ -163,6 +176,9 @@
     const input = document.getElementById("project-thread-message-input");
     const postButton = document.getElementById("project-thread-post-button");
     const postStatus = document.getElementById("project-thread-post-status");
+    const newThreadTitle = document.getElementById("new-thread-title");
+    const newThreadBtn = document.getElementById("new-thread-btn");
+    const newThreadStatus = document.getElementById("new-thread-status");
 
     function toggle(el, show) {
       if (!el) return;
@@ -272,6 +288,40 @@
         toggle(errorBox, true);
         retry.classList.remove("hidden");
       }
+    }
+
+    if (newThreadBtn) {
+      newThreadBtn.addEventListener("click", async () => {
+        if (!projectId) return;
+        const title = newThreadTitle && typeof newThreadTitle.value === "string" ? newThreadTitle.value.trim() : "";
+        if (!title) {
+          newThreadStatus.textContent = await t("ui.projectThread.titleRequired");
+          newThreadStatus.className = "mt-2 text-xs text-rose-600";
+          newThreadStatus.classList.remove("hidden");
+          return;
+        }
+        try {
+          newThreadBtn.disabled = true;
+          newThreadStatus.classList.add("hidden");
+          const created = await apiPost(`/projects/${encodeURIComponent(projectId)}/threads`, { title });
+          if (newThreadTitle) newThreadTitle.value = "";
+          newThreadStatus.textContent = await t("ui.projectThread.created");
+          newThreadStatus.className = "mt-2 text-xs text-emerald-600";
+          newThreadStatus.classList.remove("hidden");
+          await loadAll();
+          // 作成したスレッドへ自動遷移
+          if (created && created.thread_id) {
+            window.location.href = buildThreadUrl(created.thread_id);
+          }
+        } catch (e) {
+          const err = await t("common.error");
+          newThreadStatus.textContent = `${err}: ${e && e.message ? e.message : "unknown"}`;
+          newThreadStatus.className = "mt-2 text-xs text-rose-600";
+          newThreadStatus.classList.remove("hidden");
+        } finally {
+          newThreadBtn.disabled = false;
+        }
+      });
     }
 
     postButton.addEventListener("click", async () => {

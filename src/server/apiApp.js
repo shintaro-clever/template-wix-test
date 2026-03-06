@@ -16,7 +16,7 @@ const {
   deleteProject,
 } = require("../api/projects");
 const { listProjects, getProjectById } = require("./projectsStore");
-const { listRuns, createRun, claimNextQueuedRun, markRunFinished, getRun } = require("../api/runs");
+const { listRuns, listRunsByProject, createRun, claimNextQueuedRun, markRunFinished, getRun } = require("../api/runs");
 const { handleProjectRunsPost } = require("../routes/runs");
 const { handleRunsCollection } = require("./routes/runs");
 const { handleAuthLogin } = require("../routes/auth");
@@ -41,7 +41,7 @@ const {
   updateConnections,
   sanitizeConnectionsPayloadForLog,
 } = require("./connectionsStore");
-const { listThreadsByProject, getThread, postMessage } = require("./threadsStore");
+const { createThread, listThreadsByProject, getThread, postMessage } = require("./threadsStore");
 const { getProjectConnections, putProjectConnections, getProjectDrive, putProjectDrive } = require("./projectBindingsStore");
 
 const ROOT_DIR = path.join(__dirname, "..", "..");
@@ -613,6 +613,11 @@ function createApiServer(dbConn) {
       const runMatch = urlPath.match(/^\/api\/projects\/([^/]+)\/runs$/);
       if (runMatch) {
         const id = runMatch[1];
+        if (method === "GET") {
+          const project = getProjectById(db, id);
+          if (!project) return jsonError(res, 404, "NOT_FOUND", "project not found", { failure_code: "not_found" });
+          return sendJson(res, 200, { project_id: id, runs: listRunsByProject(db, id) });
+        }
         if (method === "POST") {
           return await handleProjectRunsPost(req, res, db, id);
         }
@@ -626,6 +631,24 @@ function createApiServer(dbConn) {
         if (method === "GET") {
           try {
             return sendJson(res, 200, listThreadsByProject(db, id));
+          } catch (error) {
+            return jsonError(
+              res,
+              error.status || 400,
+              error.code || "VALIDATION_ERROR",
+              error.message || "入力が不正です",
+              error.details || { failure_code: error.failure_code || "validation_error" }
+            );
+          }
+        }
+        if (method === "POST") {
+          let body;
+          try { body = await readJsonBody(req); } catch {
+            return jsonError(res, 400, "VALIDATION_ERROR", "JSONが不正です", { failure_code: "validation_error" });
+          }
+          try {
+            const created = createThread(db, id, body.title);
+            return sendJson(res, 201, created);
           } catch (error) {
             return jsonError(
               res,
