@@ -33,6 +33,7 @@ function openDb() {
         id          TEXT NOT NULL,
         name        TEXT NOT NULL,
         staging_url TEXT NOT NULL,
+        project_shared_env_json TEXT,
         created_at  TEXT NOT NULL,
         updated_at  TEXT NOT NULL,
         PRIMARY KEY (tenant_id, id)
@@ -49,6 +50,8 @@ function openDb() {
         tenant_id   TEXT NOT NULL,
         id          TEXT NOT NULL,
         project_id  TEXT NOT NULL,
+        thread_id   TEXT,
+        ai_setting_id TEXT,
         status      TEXT NOT NULL,
         inputs_json TEXT NOT NULL,
         created_at  TEXT NOT NULL,
@@ -70,6 +73,9 @@ function openDb() {
         thread_id   TEXT NOT NULL,
         author      TEXT NOT NULL,
         body        TEXT NOT NULL,
+        role        TEXT,
+        content     TEXT,
+        run_id      TEXT,
         created_at  TEXT NOT NULL,
         PRIMARY KEY (tenant_id, id)
       );
@@ -94,6 +100,20 @@ function openDb() {
         meta_json  TEXT,
         created_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS personal_ai_settings (
+        tenant_id   TEXT NOT NULL,
+        id          TEXT NOT NULL,
+        user_id     TEXT NOT NULL,
+        provider    TEXT NOT NULL,
+        model       TEXT NOT NULL,
+        secret_ref  TEXT,
+        config_json TEXT,
+        enabled     INTEGER NOT NULL DEFAULT 1,
+        is_default  INTEGER NOT NULL DEFAULT 0,
+        created_at  TEXT NOT NULL,
+        updated_at  TEXT NOT NULL,
+        PRIMARY KEY (tenant_id, id)
+      );
       CREATE TABLE IF NOT EXISTS job_templates (
         name                  TEXT NOT NULL,
         direction             TEXT NOT NULL,
@@ -109,11 +129,15 @@ function openDb() {
         ON project_threads(tenant_id, project_id, updated_at);
       CREATE INDEX IF NOT EXISTS thread_messages_thread_created
         ON thread_messages(tenant_id, thread_id, created_at);
+      CREATE INDEX IF NOT EXISTS personal_ai_settings_user
+        ON personal_ai_settings(tenant_id, user_id, updated_at DESC);
     `);
   }
   ensureConnectionColumns(db);
   ensureProjectColumns(db);
   ensureRunColumns(db);
+  ensureThreadMessageColumns(db);
+  ensurePersonalAiSettingColumns(db);
   ensureJobTemplates(db);
   migrateConnectionConfigJsonEncryption(db);
   return db;
@@ -132,6 +156,9 @@ function ensureProjectColumns(db) {
   }
   if (!columns.includes("project_drive_json")) {
     db.exec("ALTER TABLE projects ADD COLUMN project_drive_json TEXT");
+  }
+  if (!columns.includes("project_shared_env_json")) {
+    db.exec("ALTER TABLE projects ADD COLUMN project_shared_env_json TEXT");
   }
 }
 
@@ -170,6 +197,60 @@ function ensureRunColumns(db) {
   }
   if (!columns.includes("github_pr_number")) {
     db.exec("ALTER TABLE runs ADD COLUMN github_pr_number INTEGER");
+  }
+  if (!columns.includes("thread_id")) {
+    db.exec("ALTER TABLE runs ADD COLUMN thread_id TEXT");
+  }
+  if (!columns.includes("ai_setting_id")) {
+    db.exec("ALTER TABLE runs ADD COLUMN ai_setting_id TEXT");
+  }
+  db.exec("UPDATE runs SET failure_code='unknown_failure' WHERE status='failed' AND (failure_code IS NULL OR trim(failure_code)='')");
+}
+
+function ensureThreadMessageColumns(db) {
+  const columns = db.prepare("PRAGMA table_info(thread_messages)").all().map((row) => row.name);
+  if (!columns.includes("role")) {
+    db.exec("ALTER TABLE thread_messages ADD COLUMN role TEXT");
+  }
+  if (!columns.includes("content")) {
+    db.exec("ALTER TABLE thread_messages ADD COLUMN content TEXT");
+  }
+  if (!columns.includes("run_id")) {
+    db.exec("ALTER TABLE thread_messages ADD COLUMN run_id TEXT");
+  }
+}
+
+function ensurePersonalAiSettingColumns(db) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS personal_ai_settings (
+      tenant_id   TEXT NOT NULL DEFAULT 'internal',
+      id          TEXT NOT NULL,
+      user_id     TEXT NOT NULL,
+      provider    TEXT NOT NULL,
+      model       TEXT NOT NULL,
+      secret_ref  TEXT,
+      config_json TEXT,
+      enabled     INTEGER NOT NULL DEFAULT 1,
+      is_default  INTEGER NOT NULL DEFAULT 0,
+      created_at  TEXT NOT NULL,
+      updated_at  TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, id)
+    );
+    CREATE INDEX IF NOT EXISTS personal_ai_settings_user
+      ON personal_ai_settings(tenant_id, user_id, updated_at DESC);
+  `);
+  const columns = db.prepare("PRAGMA table_info(personal_ai_settings)").all().map((row) => row.name);
+  if (!columns.includes("secret_ref")) {
+    db.exec("ALTER TABLE personal_ai_settings ADD COLUMN secret_ref TEXT");
+  }
+  if (!columns.includes("config_json")) {
+    db.exec("ALTER TABLE personal_ai_settings ADD COLUMN config_json TEXT");
+  }
+  if (!columns.includes("enabled")) {
+    db.exec("ALTER TABLE personal_ai_settings ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!columns.includes("is_default")) {
+    db.exec("ALTER TABLE personal_ai_settings ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0");
   }
 }
 

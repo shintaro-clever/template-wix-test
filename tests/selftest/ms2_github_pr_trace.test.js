@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { createApiServer } = require("../../src/server/apiApp");
 const { db, DEFAULT_TENANT } = require("../../src/db");
+const { parseRunIdInput } = require("../../src/api/runs");
 const { assert, requestLocal } = require("./_helpers");
 
 async function run() {
@@ -48,6 +49,9 @@ async function run() {
     assert(runCreate.statusCode === 201, "run create should return 201");
     const runPayload = JSON.parse(runCreate.body.toString("utf8"));
     assert(runPayload.run_id, "run_id should exist");
+    const parsedRunId = parseRunIdInput(runPayload.run_id);
+    assert(parsedRunId.ok, "run_id should be public run ID");
+    const internalRunId = parsedRunId.internalId;
 
     const fromFigma = await requestLocal(handler, {
       method: "POST",
@@ -105,7 +109,7 @@ async function run() {
     assert(typeof errPayload.message_en === "string", "error.message_en should exist");
     assert(errPayload.details && typeof errPayload.details.failure_code === "string", "failure_code should exist");
 
-    db.prepare("DELETE FROM runs WHERE tenant_id=? AND id=?").run(DEFAULT_TENANT, runPayload.run_id);
+    db.prepare("DELETE FROM runs WHERE tenant_id=? AND id=?").run(DEFAULT_TENANT, internalRunId);
   } finally {
     if (prevJwt === undefined) delete process.env.JWT_SECRET;
     else process.env.JWT_SECRET = prevJwt;

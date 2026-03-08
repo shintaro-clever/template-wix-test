@@ -46,6 +46,23 @@ alias codex='codex --sandbox=workspace-write'
 
 ---
 
+## Phase Boundary SoT / フェーズ境界SoT
+
+現フェーズ/次フェーズの境界は `docs/ai/core/workflow.md` の `ARCH-00 Phase Boundary (SoT)` を正とする。
+
+---
+
+## VPS Reflection Check / VPS反映チェック
+
+VPS反映時は `agents/rules/10-network.md` の手順を必ず実施すること。  
+特に以下を必須とする:
+
+- 反映前に `bin/vps 'echo connected'` を先に実行
+- 接続失敗時は SSH 連打禁止（`fail2ban` BAN を疑って停止）
+- Workspace系修正時は反映後に `Project詳細 -> Workspace -> 左カラム会話一覧 -> 新規会話開始 -> chat最小送信 -> 設定導線` を確認
+
+---
+
 ## Branch Naming Convention / ブランチ命名規則
 
 Branch names **MUST** follow:

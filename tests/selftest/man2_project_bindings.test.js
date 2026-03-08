@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { createApiServer } = require("../../src/server/apiApp");
 const { db, DEFAULT_TENANT } = require("../../src/db");
+const { parsePublicIdFor, KINDS } = require("../../src/id/publicIds");
 const { assert, requestLocal } = require("./_helpers");
 
 async function run() {
@@ -36,7 +37,9 @@ async function run() {
     });
     assert(createRes.statusCode === 201, `project create should return 201, got ${createRes.statusCode}`);
     const project = JSON.parse(createRes.body.toString("utf8"));
-    createdProjectIds.push(project.id);
+    const parsedProject = parsePublicIdFor(KINDS.project, project.id);
+    assert(parsedProject.ok, "project.id should be public project ID");
+    createdProjectIds.push(parsedProject.internalId);
     const pid = project.id;
 
     // 1. GET /api/projects/:id/connections → default (enabled:false x3)
@@ -149,7 +152,7 @@ async function run() {
     assert(driveData2.enabled === true, "round-trip: enabled should be true");
 
     // 9. project not found → 404 (GET + PUT)
-    const fakeId = "nonexistent-project-id-xyz";
+    const fakeId = `project_${crypto.randomUUID()}`;
     const connGet404 = await requestLocal(handler, {
       method: "GET",
       url: `/api/projects/${fakeId}/connections`,

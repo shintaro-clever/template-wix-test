@@ -1,4 +1,11 @@
 const { DEFAULT_TENANT } = require("../db");
+const {
+  validateGithubRepository,
+  validateFigmaFile,
+  validateDriveUrl,
+  getProjectSharedEnvironment,
+  putProjectSharedEnvironment,
+} = require("../api/projects");
 
 const ALLOWED_BINDING_KEYS = ["ai", "github", "figma"];
 
@@ -8,6 +15,10 @@ function validationError(message) {
   err.code = "VALIDATION_ERROR";
   err.failure_code = "validation_error";
   return err;
+}
+
+function normalizeText(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function projectExists(db, projectId) {
@@ -39,6 +50,19 @@ function getProjectConnections(db, projectId) {
   }
 }
 
+function readProjectBindingsRaw(db, projectId) {
+  const row = db
+    .prepare("SELECT project_bindings_json FROM projects WHERE tenant_id=? AND id=? LIMIT 1")
+    .get(DEFAULT_TENANT, projectId);
+  if (!row || !row.project_bindings_json) return {};
+  try {
+    const parsed = JSON.parse(row.project_bindings_json);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function putProjectConnections(db, projectId, body) {
   if (!projectExists(db, projectId)) {
     const err = new Error("Project not found");
@@ -58,7 +82,11 @@ function putProjectConnections(db, projectId, body) {
     if (typeof item.enabled !== "boolean") throw validationError("enabled must be boolean");
   }
   const now = new Date().toISOString();
-  const data = { items: body.items.map(({ key, enabled }) => ({ key, enabled })) };
+  const current = readProjectBindingsRaw(db, projectId);
+  const data = {
+    ...current,
+    items: body.items.map(({ key, enabled }) => ({ key, enabled })),
+  };
   db.prepare(
     "UPDATE projects SET project_bindings_json=?, updated_at=? WHERE tenant_id=? AND id=?"
   ).run(JSON.stringify(data), now, DEFAULT_TENANT, projectId);
@@ -89,6 +117,23 @@ function getProjectDrive(db, projectId) {
   }
 }
 
+function getProjectSettings(db, projectId) {
+  if (!projectExists(db, projectId)) return null;
+  const shared = getProjectSharedEnvironment(db, projectId);
+  const bindings = readProjectBindingsRaw(db, projectId);
+  const drive = getProjectDrive(db, projectId) || defaultDrive(projectId);
+  const settings = bindings.settings && typeof bindings.settings === "object" ? bindings.settings : {};
+  const githubRepository = shared?.github?.repository || normalizeText(settings.github_repository);
+  const figmaFile = shared?.figma?.file || normalizeText(settings.figma_file);
+  const driveUrl = shared?.drive?.url || normalizeText(drive.folder_url);
+  return {
+    project_id: projectId,
+    github_repository: githubRepository,
+    figma_file: figmaFile,
+    drive_url: driveUrl,
+  };
+}
+
 function putProjectDrive(db, projectId, body) {
   if (!projectExists(db, projectId)) {
     const err = new Error("Project not found");
@@ -117,4 +162,78 @@ function putProjectDrive(db, projectId, body) {
   return { project_id: projectId, ...data };
 }
 
-module.exports = { getProjectConnections, putProjectConnections, getProjectDrive, putProjectDrive };
+function putProjectSettings(db, projectId, body = {}) {
+  if (!projectExists(db, projectId)) {
+    const err = new Error("Project not found");
+    err.status = 404;
+    err.code = "NOT_FOUND";
+    err.failure_code = "not_found";
+    throw err;
+  }
+  if (body.github_repository !== undefined && typeof body.github_repository !== "string") {
+    throw validationError("github_repository must be string");
+  }
+  if (body.figma_file !== undefined && typeof body.figma_file !== "string") {
+    throw validationError("figma_file must be string");
+  }
+  if (body.drive_url !== undefined && typeof body.drive_url !== "string") {
+    throw validationError("drive_url must be string");
+  }
+  const repoErr = validateGithubRepository(body.github_repository);
+  const figmaErr = validateFigmaFile(body.figma_file);
+  const driveErr = validateDriveUrl(body.drive_url);
+  if (repoErr || figmaErr || driveErr) {
+    throw validationError(repoErr || figmaErr || driveErr);
+  }
+
+  const currentSettings = getProjectSettings(db, projectId) || {
+    project_id: projectId,
+    github_repository: "",
+    figma_file: "",
+    drive_url: "",
+  };
+  const nextSettings = {
+    github_repository:
+      body.github_repository !== undefined ? normalizeText(body.github_repository) : currentSettings.github_repository,
+    figma_file: body.figma_file !== undefined ? normalizeText(body.figma_file) : currentSettings.figma_file,
+    drive_url: body.drive_url !== undefined ? normalizeText(body.drive_url) : currentSettings.drive_url,
+  };
+
+  putProjectSharedEnvironment(db, projectId, {
+    github_repository: nextSettings.github_repository,
+    figma_file: nextSettings.figma_file,
+    drive_url: nextSettings.drive_url,
+  });
+
+  const now = new Date().toISOString();
+  const bindings = readProjectBindingsRaw(db, projectId);
+  const mergedBindings = {
+    ...bindings,
+    settings: {
+      ...(bindings.settings && typeof bindings.settings === "object" ? bindings.settings : {}),
+      github_repository: nextSettings.github_repository,
+      figma_file: nextSettings.figma_file,
+    },
+  };
+  db.prepare("UPDATE projects SET project_bindings_json=?, updated_at=? WHERE tenant_id=? AND id=?").run(
+    JSON.stringify(mergedBindings),
+    now,
+    DEFAULT_TENANT,
+    projectId
+  );
+
+  const drivePayload = {
+    folder_url: nextSettings.drive_url,
+  };
+  putProjectDrive(db, projectId, drivePayload);
+  return getProjectSettings(db, projectId);
+}
+
+module.exports = {
+  getProjectConnections,
+  putProjectConnections,
+  getProjectDrive,
+  putProjectDrive,
+  getProjectSettings,
+  putProjectSettings,
+};

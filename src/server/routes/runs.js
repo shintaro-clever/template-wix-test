@@ -1,7 +1,8 @@
 const { readJsonBody, sendJson, jsonError } = require("../../api/projects");
-const { listRuns, createRun } = require("../../api/runs");
+const { listRuns, createRun, toPublicRunId } = require("../../api/runs");
 const { validateRunInputs } = require("../../validation/runInputs");
 const { DEFAULT_TENANT } = require("../../db/sqlite");
+const { loadProjectSharedContext } = require("../projectSharedContext");
 
 async function handleRunsCollection(req, res, db, { onRunQueued } = {}) {
   const method = (req.method || "GET").toUpperCase();
@@ -59,11 +60,38 @@ async function handleRunsCollection(req, res, db, { onRunQueued } = {}) {
       : typeof inputs.ingest_artifact_path === "string" && inputs.ingest_artifact_path.trim()
         ? inputs.ingest_artifact_path.trim()
         : null;
+  const sharedContext = loadProjectSharedContext(db, validation.normalized.project_id || requestedProjectId);
+  if (!sharedContext.ok) {
+    return jsonError(
+      res,
+      sharedContext.status || 400,
+      sharedContext.code || "VALIDATION_ERROR",
+      sharedContext.message || "入力が不正です",
+      sharedContext.details || { failure_code: "validation_error" }
+    );
+  }
   const runId = createRun(db, {
     job_type: jobType,
     run_mode: runMode,
-    inputs: { ...inputs, ...validation.normalized },
-    project_id: validation.normalized.project_id || null,
+    inputs: {
+      ...inputs,
+      ...validation.normalized,
+      ...(sharedContext.publicProjectId ? { project_id: sharedContext.publicProjectId } : {}),
+      shared_environment: sharedContext.shared_environment,
+    },
+    project_id: sharedContext.internalProjectId || validation.normalized.project_id || null,
+    thread_id:
+      typeof body.thread_id === "string" && body.thread_id.trim()
+        ? body.thread_id.trim()
+        : typeof inputs.thread_id === "string" && inputs.thread_id.trim()
+          ? inputs.thread_id.trim()
+          : null,
+    ai_setting_id:
+      typeof body.ai_setting_id === "string" && body.ai_setting_id.trim()
+        ? body.ai_setting_id.trim()
+        : typeof inputs.ai_setting_id === "string" && inputs.ai_setting_id.trim()
+          ? inputs.ai_setting_id.trim()
+          : null,
     target_path: targetPath,
     figma_file_key: figmaFileKey,
     ingest_artifact_path: ingestArtifactPath,
@@ -71,7 +99,7 @@ async function handleRunsCollection(req, res, db, { onRunQueued } = {}) {
   if (typeof onRunQueued === "function") {
     onRunQueued(runId);
   }
-  return sendJson(res, 201, { run_id: runId, status: "queued" });
+  return sendJson(res, 201, { run_id: toPublicRunId(runId), status: "queued" });
 }
 
 module.exports = {

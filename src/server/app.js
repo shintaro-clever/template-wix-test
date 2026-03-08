@@ -23,9 +23,27 @@ const {
   createProject,
   patchProject
 } = require('../api/projects');
-const { listProjects, getProjectById } = require('./projectsStore');
-const { createThread, listThreadsByProject, getThread, postMessage } = require('./threadsStore');
-const { getProjectConnections, putProjectConnections, getProjectDrive, putProjectDrive } = require('./projectBindingsStore');
+const { listProjects, getProjectById, toProjectView, parseProjectIdInput } = require('./projectsStore');
+const { KINDS, buildPublicId, isUuid } = require('../id/publicIds');
+const { createThread, listThreadsByProject, getThread, postMessage, getThreadProjectId, parseThreadIdInput } = require('./threadsStore');
+const { createRun, toPublicRunId } = require('../api/runs');
+const {
+  getProjectConnections,
+  putProjectConnections,
+  getProjectDrive,
+  putProjectDrive,
+  getProjectSettings,
+  putProjectSettings,
+} = require('./projectBindingsStore');
+const {
+  listPersonalAiSettings,
+  getPersonalAiSetting,
+  createPersonalAiSetting,
+  patchPersonalAiSetting,
+  getDefaultPersonalAiSetting,
+} = require('../api/personalAiSettings');
+const { loadProjectSharedContext } = require('./projectSharedContext');
+const { processChatTurnWithLocalStub } = require('./chatStub');
 
 const ROOT_DIR = path.join(__dirname, '..', '..');
 const distDir = path.join(ROOT_DIR, 'apps', 'hub', 'dist');
@@ -46,6 +64,24 @@ const runJobScript = path.join(scriptsDir, 'run-job.js');
 const connectorSmokeScript = path.relative(process.cwd(), path.join(scriptsDir, 'connector-smoke.js'));
 const appDb = initDB();
 // Quick smoke test: node server.js → curl -I http://127.0.0.1:3000/jobs
+
+function toPublicProjectId(internalId) {
+  return isUuid(internalId) ? buildPublicId(KINDS.project, internalId) : internalId;
+}
+
+function withPublicProjectId(payload) {
+  if (!payload || typeof payload !== 'object') return payload;
+  if (!Object.prototype.hasOwnProperty.call(payload, 'project_id')) return payload;
+  return { ...payload, project_id: toPublicProjectId(payload.project_id) };
+}
+
+function mapThreadsWithPublicProjectId(payload) {
+  if (!payload || typeof payload !== 'object' || !Array.isArray(payload.threads)) return payload;
+  return {
+    ...payload,
+    threads: payload.threads.map((row) => withPublicProjectId(row)),
+  };
+}
 
 function fileExists(filePath) {
   try {
@@ -698,6 +734,12 @@ function parseJsonBody(req, limitBytes = 1024 * 1024) {
   });
 }
 
+function resolveLocalUserId(req) {
+  const raw = req && req.headers ? req.headers['x-user-id'] : '';
+  const userId = typeof raw === 'string' ? raw.trim() : '';
+  return userId || 'local-user';
+}
+
 async function handleConnectionsApi(req, res, method) {
   if (method === 'GET') {
     const data = readConnections();
@@ -1028,6 +1070,106 @@ async function handleRequest(req, res) {
     await handleConnectionsApi(req, res, method);
     return;
   }
+  if (urlPath === '/api/me/ai-settings') {
+    const userId = resolveLocalUserId(req);
+    if (method === 'GET') {
+      try {
+        sendJson(res, 200, listPersonalAiSettings(appDb, userId));
+      } catch (error) {
+        sendJsonError(
+          res,
+          error.status || 400,
+          error.code || 'VALIDATION_ERROR',
+          error.message || '入力が不正です',
+          error.details || { failure_code: error.failure_code || 'validation_error' }
+        );
+      }
+      return;
+    }
+    if (method === 'POST') {
+      let body = {};
+      try { body = await parseJsonBody(req); } catch { sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSONが不正です'); return; }
+      try {
+        sendJson(res, 201, createPersonalAiSetting(appDb, userId, body));
+      } catch (error) {
+        sendJsonError(
+          res,
+          error.status || 400,
+          error.code || 'VALIDATION_ERROR',
+          error.message || '入力が不正です',
+          error.details || { failure_code: error.failure_code || 'validation_error' }
+        );
+      }
+      return;
+    }
+    sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed');
+    return;
+  }
+  if (urlPath === '/api/me/ai-settings/default') {
+    if (method !== 'GET') {
+      sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed');
+      return;
+    }
+    const userId = resolveLocalUserId(req);
+    try {
+      sendJson(res, 200, { item: getDefaultPersonalAiSetting(appDb, userId) });
+    } catch (error) {
+      sendJsonError(
+        res,
+        error.status || 400,
+        error.code || 'VALIDATION_ERROR',
+        error.message || '入力が不正です',
+        error.details || { failure_code: error.failure_code || 'validation_error' }
+      );
+    }
+    return;
+  }
+  if (segments[0] === 'api' && segments[1] === 'me' && segments[2] === 'ai-settings' && segments.length === 4) {
+    const userId = resolveLocalUserId(req);
+    const aiSettingId = segments[3];
+    if (method === 'GET') {
+      try {
+        const item = getPersonalAiSetting(appDb, userId, aiSettingId);
+        if (!item) {
+          sendJsonError(res, 404, 'NOT_FOUND', 'ai setting not found', { failure_code: 'not_found' });
+          return;
+        }
+        sendJson(res, 200, { item });
+      } catch (error) {
+        sendJsonError(
+          res,
+          error.status || 400,
+          error.code || 'VALIDATION_ERROR',
+          error.message || '入力が不正です',
+          error.details || { failure_code: error.failure_code || 'validation_error' }
+        );
+      }
+      return;
+    }
+    if (method === 'PATCH') {
+      let body = {};
+      try { body = await parseJsonBody(req); } catch { sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSONが不正です'); return; }
+      try {
+        const item = patchPersonalAiSetting(appDb, userId, aiSettingId, body);
+        if (!item) {
+          sendJsonError(res, 404, 'NOT_FOUND', 'ai setting not found', { failure_code: 'not_found' });
+          return;
+        }
+        sendJson(res, 200, { item });
+      } catch (error) {
+        sendJsonError(
+          res,
+          error.status || 400,
+          error.code || 'VALIDATION_ERROR',
+          error.message || '入力が不正です',
+          error.details || { failure_code: error.failure_code || 'validation_error' }
+        );
+      }
+      return;
+    }
+    sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed');
+    return;
+  }
   if (urlPath === '/api/connectors') {
     await handleConnectorsApi(req, res, method);
     return;
@@ -1064,20 +1206,25 @@ async function handleRequest(req, res) {
       description: body.description,
       drive_folder_id: body.drive_folder_id
     });
-    sendJson(res, 201, created);
+    sendJson(res, 201, toProjectView(created));
     return;
   }
   if (segments[0] === 'api' && segments[1] === 'projects' && segments.length === 4 && segments[3] === 'connections') {
-    const projectId = segments[2];
+    const resolved = parseProjectIdInput(segments[2]);
+    if (!resolved.ok) {
+      sendJsonError(res, resolved.status, resolved.code, resolved.message, resolved.details);
+      return;
+    }
+    const projectId = resolved.internalId;
     if (method === 'GET') {
       const data = getProjectConnections(appDb, projectId);
       if (!data) { sendJsonError(res, 404, 'NOT_FOUND', 'Project not found'); return; }
-      sendJson(res, 200, data); return;
+      sendJson(res, 200, withPublicProjectId(data)); return;
     }
     if (method === 'PUT' || method === 'POST') {
       let body = {};
       try { body = await parseJsonBody(req); } catch { sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSON不正'); return; }
-      try { sendJson(res, 200, putProjectConnections(appDb, projectId, body)); }
+      try { sendJson(res, 200, withPublicProjectId(putProjectConnections(appDb, projectId, body))); }
       catch (e) { sendJsonError(res, e.status || 400, e.code || 'VALIDATION_ERROR', e.message); }
       return;
     }
@@ -1085,31 +1232,67 @@ async function handleRequest(req, res) {
   }
 
   if (segments[0] === 'api' && segments[1] === 'projects' && segments.length === 4 && segments[3] === 'drive') {
-    const projectId = segments[2];
+    const resolved = parseProjectIdInput(segments[2]);
+    if (!resolved.ok) {
+      sendJsonError(res, resolved.status, resolved.code, resolved.message, resolved.details);
+      return;
+    }
+    const projectId = resolved.internalId;
     if (method === 'GET') {
       const data = getProjectDrive(appDb, projectId);
       if (!data) { sendJsonError(res, 404, 'NOT_FOUND', 'Project not found'); return; }
-      sendJson(res, 200, data); return;
+      sendJson(res, 200, withPublicProjectId(data)); return;
     }
     if (method === 'PUT' || method === 'POST') {
       let body = {};
       try { body = await parseJsonBody(req); } catch { sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSON不正'); return; }
-      try { sendJson(res, 200, putProjectDrive(appDb, projectId, body)); }
+      try { sendJson(res, 200, withPublicProjectId(putProjectDrive(appDb, projectId, body))); }
       catch (e) { sendJsonError(res, e.status || 400, e.code || 'VALIDATION_ERROR', e.message); }
       return;
     }
     sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed'); return;
   }
 
-  if (segments[0] === 'api' && segments[1] === 'projects' && segments.length === 3) {
-    const projectId = segments[2];
+  if (segments[0] === 'api' && segments[1] === 'projects' && segments.length === 4 && segments[3] === 'settings') {
+    const resolved = parseProjectIdInput(segments[2]);
+    if (!resolved.ok) {
+      sendJsonError(res, resolved.status, resolved.code, resolved.message, resolved.details);
+      return;
+    }
+    const projectId = resolved.internalId;
     if (method === 'GET') {
-      const item = getProjectById(appDb, projectId);
-      if (!item) {
+      const data = getProjectSettings(appDb, projectId);
+      if (!data) { sendJsonError(res, 404, 'NOT_FOUND', 'Project not found', { failure_code: 'not_found' }); return; }
+      sendJson(res, 200, withPublicProjectId(data)); return;
+    }
+    if (method === 'PUT' || method === 'POST') {
+      let body = {};
+      try { body = await parseJsonBody(req); } catch { sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSON不正'); return; }
+      try { sendJson(res, 200, withPublicProjectId(putProjectSettings(appDb, projectId, body))); }
+      catch (e) { sendJsonError(res, e.status || 400, e.code || 'VALIDATION_ERROR', e.message, { failure_code: e.failure_code || 'validation_error' }); }
+      return;
+    }
+    sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed'); return;
+  }
+
+  if (segments[0] === 'api' && segments[1] === 'projects' && segments.length === 3) {
+    const resolved = parseProjectIdInput(segments[2]);
+    if (!resolved.ok) {
+      sendJsonError(res, resolved.status, resolved.code, resolved.message, resolved.details);
+      return;
+    }
+    const projectId = resolved.internalId;
+    if (method === 'GET') {
+      const itemRef = getProjectById(appDb, segments[2]);
+      if (!itemRef.ok) {
+        sendJsonError(res, itemRef.status, itemRef.code, itemRef.message, itemRef.details);
+        return;
+      }
+      if (!itemRef.item) {
         sendJsonError(res, 404, 'NOT_FOUND', 'Projectが見つかりません', { failure_code: 'not_found' });
         return;
       }
-      sendJson(res, 200, item);
+      sendJson(res, 200, itemRef.item);
       return;
     }
     if (method === 'PATCH') {
@@ -1146,15 +1329,20 @@ async function handleRequest(req, res) {
         sendJsonError(res, 404, 'NOT_FOUND', 'Projectが見つかりません', { failure_code: 'not_found' });
         return;
       }
-      sendJson(res, 200, updated);
+      sendJson(res, 200, toProjectView(updated));
       return;
     }
   }
   if (segments[0] === 'api' && segments[1] === 'projects' && segments.length === 4 && segments[3] === 'threads') {
-    const projectId = segments[2];
+    const resolved = parseProjectIdInput(segments[2]);
+    if (!resolved.ok) {
+      sendJsonError(res, resolved.status, resolved.code, resolved.message, resolved.details);
+      return;
+    }
+    const projectId = resolved.internalId;
     if (method === 'GET') {
       try {
-        sendJson(res, 200, listThreadsByProject(appDb, projectId));
+        sendJson(res, 200, mapThreadsWithPublicProjectId(listThreadsByProject(appDb, projectId)));
       } catch (error) {
         sendJsonError(
           res,
@@ -1171,7 +1359,7 @@ async function handleRequest(req, res) {
       try { body = await parseJsonBody(req); } catch { sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSONが不正です'); return; }
       try {
         const created = createThread(appDb, projectId, body.title);
-        sendJson(res, 201, created);
+        sendJson(res, 201, withPublicProjectId(created));
       } catch (error) {
         sendJsonError(
           res,
@@ -1184,6 +1372,177 @@ async function handleRequest(req, res) {
       return;
     }
     sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed', { failure_code: 'validation_error' });
+    return;
+  }
+  if (segments[0] === 'api' && segments[1] === 'projects' && segments.length === 6 && segments[3] === 'threads' && segments[5] === 'chat') {
+    const resolved = parseProjectIdInput(segments[2]);
+    if (!resolved.ok) {
+      sendJsonError(res, resolved.status, resolved.code, resolved.message, resolved.details);
+      return;
+    }
+    if (method !== 'POST') {
+      sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed', { failure_code: 'validation_error' });
+      return;
+    }
+    const projectId = resolved.internalId;
+    const threadIdInput = segments[4];
+    let body = {};
+    try { body = await parseJsonBody(req); } catch { sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSONが不正です'); return; }
+    const content =
+      typeof body.content === 'string' && body.content.trim()
+        ? body.content.trim()
+        : typeof body.body === 'string' && body.body.trim()
+          ? body.body.trim()
+          : '';
+    if (!content) {
+      sendJsonError(res, 400, 'VALIDATION_ERROR', 'content is required', { failure_code: 'validation_error' });
+      return;
+    }
+    try {
+      const parsedThread = parseThreadIdInput(threadIdInput);
+      const ownerProjectId = getThreadProjectId(appDb, parsedThread.internalId);
+      if (!ownerProjectId) {
+        sendJsonError(res, 404, 'NOT_FOUND', 'thread not found', { failure_code: 'not_found' });
+        return;
+      }
+      if (ownerProjectId !== projectId) {
+        sendJsonError(res, 400, 'VALIDATION_ERROR', 'thread does not belong to project', { failure_code: 'validation_error' });
+        return;
+      }
+      const posted = postMessage(appDb, parsedThread.publicId, { role: 'user', content, run_id: body.run_id }, resolveLocalUserId(req));
+      const sharedContext = loadProjectSharedContext(appDb, projectId);
+      if (!sharedContext.ok) {
+        sendJsonError(
+          res,
+          sharedContext.status || 400,
+          sharedContext.code || 'VALIDATION_ERROR',
+          sharedContext.message || '入力が不正です',
+          sharedContext.details || { failure_code: 'validation_error' }
+        );
+        return;
+      }
+      const defaultAiSetting = getDefaultPersonalAiSetting(appDb, resolveLocalUserId(req));
+      const selectedAiSettingId = defaultAiSetting && defaultAiSetting.ai_setting_id ? defaultAiSetting.ai_setting_id : null;
+      const selectedProvider = defaultAiSetting && typeof defaultAiSetting.provider === 'string' ? defaultAiSetting.provider : 'local_stub';
+      const selectedModel = defaultAiSetting && typeof defaultAiSetting.model === 'string' ? defaultAiSetting.model : 'local_stub';
+      const runId = createRun(appDb, {
+        project_id: projectId,
+        thread_id: parsedThread.publicId,
+        ai_setting_id: selectedAiSettingId,
+        job_type: 'integration_hub.workspace.chat_turn',
+        run_mode: 'mcp',
+        inputs: {
+          project_id: resolved.publicId,
+          thread_id: parsedThread.publicId,
+          ai_setting_id: selectedAiSettingId || undefined,
+          ai_provider: selectedProvider,
+          ai_model: selectedModel,
+          content,
+          shared_environment: sharedContext.shared_environment
+        },
+        target_path: '.ai-runs/{{run_id}}/workspace_chat.json',
+      });
+      const chatResult = processChatTurnWithLocalStub(appDb, {
+        runId,
+        threadId: parsedThread.publicId,
+        content,
+        actorId: 'assistant',
+        aiSetting: { provider: selectedProvider, model: selectedModel }
+      });
+      sendJson(res, 201, {
+        project_id: resolved.publicId,
+        thread_id: parsedThread.publicId,
+        message_id: posted.message_id,
+        run_id: toPublicRunId(runId),
+        ai_setting_id: selectedAiSettingId || null,
+        status: chatResult.status,
+        failure_code: chatResult.failure_code,
+        assistant_message_id: chatResult.assistant_message_id,
+      });
+    } catch (error) {
+      sendJsonError(
+        res,
+        error.status || 400,
+        error.code || 'VALIDATION_ERROR',
+        error.message || '入力が不正です',
+        error.details || { failure_code: error.failure_code || 'validation_error' }
+      );
+    }
+    return;
+  }
+  if (segments[0] === 'api' && segments[1] === 'projects' && segments.length === 5 && segments[3] === 'workspace' && segments[4] === 'messages') {
+    const resolved = parseProjectIdInput(segments[2]);
+    if (!resolved.ok) {
+      sendJsonError(res, resolved.status, resolved.code, resolved.message, resolved.details);
+      return;
+    }
+    if (method !== 'POST') {
+      sendJsonError(res, 405, 'VALIDATION_ERROR', 'Method not allowed');
+      return;
+    }
+    const projectId = resolved.internalId;
+    let body = {};
+    try { body = await parseJsonBody(req); } catch { sendJsonError(res, 400, 'VALIDATION_ERROR', 'JSONが不正です'); return; }
+    const content =
+      typeof body.content === 'string' && body.content.trim()
+        ? body.content.trim()
+        : typeof body.body === 'string' && body.body.trim()
+          ? body.body.trim()
+          : '';
+    if (!content) {
+      sendJsonError(res, 400, 'VALIDATION_ERROR', 'content is required', { failure_code: 'validation_error' });
+      return;
+    }
+    let threadId = typeof body.thread_id === 'string' ? body.thread_id.trim() : '';
+    let createdThread = false;
+    try {
+      if (threadId) {
+        const ownerProjectId = getThreadProjectId(appDb, threadId);
+        if (!ownerProjectId) {
+          sendJsonError(res, 404, 'NOT_FOUND', 'thread not found', { failure_code: 'not_found' });
+          return;
+        }
+        if (ownerProjectId !== projectId) {
+          sendJsonError(res, 400, 'VALIDATION_ERROR', 'thread does not belong to project', { failure_code: 'validation_error' });
+          return;
+        }
+      } else {
+        const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : content.slice(0, 80);
+        const created = createThread(appDb, projectId, title);
+        threadId = created.thread_id;
+        createdThread = true;
+      }
+      const posted = postMessage(appDb, threadId, { role: 'user', content, run_id: body.run_id }, 'user');
+      const runId = createRun(appDb, {
+        project_id: projectId,
+        thread_id: threadId,
+        ai_setting_id: typeof body.ai_setting_id === 'string' ? body.ai_setting_id.trim() : null,
+        job_type: 'integration_hub.workspace.chat_turn',
+        run_mode: 'mcp',
+        inputs: {
+          project_id: resolved.publicId,
+          thread_id: threadId,
+          ai_setting_id: typeof body.ai_setting_id === 'string' ? body.ai_setting_id.trim() : undefined,
+          content
+        },
+        target_path: '.ai-runs/{{run_id}}/workspace_chat.json',
+      });
+      sendJson(res, 201, {
+        project_id: resolved.publicId,
+        thread_id: threadId,
+        created_thread: createdThread,
+        message_id: posted.message_id,
+        run_id: toPublicRunId(runId),
+      });
+    } catch (error) {
+      sendJsonError(
+        res,
+        error.status || 400,
+        error.code || 'VALIDATION_ERROR',
+        error.message || '入力が不正です',
+        error.details || { failure_code: error.failure_code || 'validation_error' }
+      );
+    }
     return;
   }
   if (segments[0] === 'api' && segments[1] === 'threads' && segments.length === 3) {

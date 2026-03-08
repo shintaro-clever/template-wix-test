@@ -75,6 +75,22 @@ Phase1 Integration Hub Stub（検証器：/jobs）
 - Phase1 Integration Hub Stub（検証器としての `/jobs`）
 - Connections 設定UI（暫定）
 
+## ARCH-00 現フェーズ境界（SoT）
+
+現フェーズの対象:
+- 個人設定は既定AIを1件のみ使う
+- プロジェクト設定で GitHub / Figma / Drive を共有する
+- Thread は「個人AI設定 + プロジェクト共有環境 + 会話履歴」を合成して Run を起動する
+
+次フェーズへ分離する対象:
+- 複数AI接続
+- 役割設定（role/profile/persona など）
+
+次フェーズSoT（設計のみ、現フェーズ実装対象外）:
+- 個人AI設定を複数接続対応へ拡張（enabled/既定/接続ごとの管理）
+- role/profile/persona 単位で利用AIを割り当て
+- Runで role -> ai_setting 選択結果を追跡可能にする
+
 ## API Notes（P2-01 最小）
 
 - `GET /api/connectors`: `id/key/name`, `enabled/connected`, `last_checked_at`, `notes` を返します。

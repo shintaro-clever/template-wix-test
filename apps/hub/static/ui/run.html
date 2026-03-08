@@ -194,10 +194,11 @@
     <script src="/ui/sidebar.js"></script>
     <script src="/ui/i18n/i18n.js" defer></script>
     <script type="module">
-      import { apiGet, setText, t } from "/ui/api.js";
+      import { apiGet, isPrefixedId, setText, t } from "/ui/api.js";
 
       const params = new URLSearchParams(window.location.search || "");
-      const runId = (params.get("run_id") || "").trim();
+      const rawRunId = (params.get("run_id") || "").trim();
+      const runId = isPrefixedId("run", rawRunId) ? rawRunId : "";
 
       const feedback = document.getElementById("run-feedback");
       const retry = document.getElementById("run-retry");
@@ -265,14 +266,14 @@
         if (!runId) {
           const msg = await t("ui.run.missingId");
           const err = await t("common.error");
-          feedback.textContent = `${err}: ${msg}`;
+          feedback.textContent = `${err}: ${rawRunId ? "run_id format is invalid" : msg}`;
           retry.classList.remove("hidden");
           return;
         }
 
         try {
           const payload = await apiGet("/runs");
-          const runs = Array.isArray(payload && payload.runs) ? payload.runs : [];
+          const runs = Array.isArray(payload) ? payload : (Array.isArray(payload && payload.runs) ? payload.runs : []);
           const run = runs.find((item) => String(item && item.run_id) === runId);
           if (!run) {
             const msg = await t("ui.run.notFound");

@@ -2,6 +2,8 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { createApiServer } = require("../../src/server/apiApp");
 const { db, DEFAULT_TENANT } = require("../../src/db");
+const { parsePublicIdFor, KINDS } = require("../../src/id/publicIds");
+const { parseRunIdInput } = require("../../src/api/runs");
 const { assert, requestLocal } = require("./_helpers");
 
 async function run() {
@@ -38,7 +40,9 @@ async function run() {
     });
     assert(createWithDrive.statusCode === 201, "project create with drive_folder_id should return 201");
     const projectWithDrive = JSON.parse(createWithDrive.body.toString("utf8"));
-    createdProjectIds.push(projectWithDrive.id);
+    const parsedWithDrive = parsePublicIdFor(KINDS.project, projectWithDrive.id);
+    assert(parsedWithDrive.ok, "projectWithDrive.id should be public project ID");
+    createdProjectIds.push(parsedWithDrive.internalId);
     assert(projectWithDrive.drive_folder_id === "1AbCdEfGhIJkLmNoPqRstu", "drive_folder_id should be normalized to ID");
 
     const readProject = await requestLocal(handler, {
@@ -61,7 +65,9 @@ async function run() {
     });
     assert(createWithoutDrive.statusCode === 201, "project create without drive should return 201");
     const projectWithoutDrive = JSON.parse(createWithoutDrive.body.toString("utf8"));
-    createdProjectIds.push(projectWithoutDrive.id);
+    const parsedWithoutDrive = parsePublicIdFor(KINDS.project, projectWithoutDrive.id);
+    assert(parsedWithoutDrive.ok, "projectWithoutDrive.id should be public project ID");
+    createdProjectIds.push(parsedWithoutDrive.internalId);
 
     const missingProjectRun = await requestLocal(handler, {
       method: "POST",
@@ -84,7 +90,7 @@ async function run() {
       url: "/api/runs",
       headers: authz,
       body: JSON.stringify({
-        project_id: projectWithoutDrive.id,
+        project_id: parsedWithoutDrive.internalId,
         job_type: "integration_hub.phase1.code_to_figma_from_url",
         run_mode: "mcp",
         target_path: "vault/tmp",
@@ -101,7 +107,7 @@ async function run() {
       url: "/api/runs",
       headers: authz,
       body: JSON.stringify({
-        project_id: projectWithDrive.id,
+        project_id: parsedWithDrive.internalId,
         job_type: "integration_hub.phase1.code_to_figma_from_url",
         run_mode: "mcp",
         target_path: "vault/tmp",
@@ -113,7 +119,9 @@ async function run() {
     });
     assert(runCreate.statusCode === 201, "drive export should be accepted with configured project");
     const runPayload = JSON.parse(runCreate.body.toString("utf8"));
-    createdRunIds.push(runPayload.run_id);
+    const parsedRunId = parseRunIdInput(runPayload.run_id);
+    assert(parsedRunId.ok, "run_id should be public run ID");
+    createdRunIds.push(parsedRunId.internalId);
 
     const runDetail = await requestLocal(handler, {
       method: "GET",

@@ -50,7 +50,7 @@ function executeLocalRun({ runId, jobType, runMode, inputs, targetPath }) {
   writeText(logPath, `[local-runner] start run_id=${safeRunId} job_type=${jobType || "-"} run_mode=${runMode || "mcp"}\n`);
   writeJson(target.relative, {
     run_id: safeRunId,
-    status: "completed",
+    status: "succeeded",
     job_type: jobType || null,
     run_mode: runMode || "mcp",
     inputs: inputs || {},
@@ -64,7 +64,7 @@ function executeLocalRun({ runId, jobType, runMode, inputs, targetPath }) {
   });
 
   return {
-    status: "completed",
+    status: "succeeded",
     failure_code: null,
     artifacts: [target.relative, logPath, summaryPath],
   };

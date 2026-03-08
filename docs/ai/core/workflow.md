@@ -36,6 +36,32 @@ The goal is: PR → Issue → Figma → Decision must always be traceable.
 - Review history: GitHub PR
 - Phase2 enforcement design (RBAC / Vault / Audit): `docs/ai/core/phase2-integration-hub.md`
 
+## ARCH-00 Phase Boundary (SoT)
+
+### Current Phase (In Scope)
+- Personal AI Settings: 既定AIを **1件のみ** 使用する。
+- Project Settings: GitHub / Figma / Drive をプロジェクト単位で共有する。
+- Thread Run Composition: Thread 実行時は以下を合成して Run を起動する。
+  - 個人AI設定（既定AI 1件）
+  - プロジェクト共有環境（GitHub/Figma/Drive）
+  - 会話履歴（Thread messages）
+
+### Next Phase (Out of Scope for now)
+- 複数AI接続（同時選択・切替・優先順制御）
+- 役割設定（role/profile/persona の分岐運用）
+
+### Next Phase SoT (Design Only / No Implementation in Current Phase)
+- Personal AI Settings は「既定1件」から「複数接続」へ拡張する。
+  - 例: provider/model/secret_ref を複数件保持し、接続ごとに enabled 状態を持つ。
+- 役割設定（role/profile/persona）を導入し、役割ごとに優先AI接続を割り当てる。
+  - 例: `planner`, `implementer`, `reviewer` などの role ごとに ai_setting_id を紐付ける。
+- Workspace/Run では、実行時に「どの role がどの ai_setting を選んだか」を追跡可能にする。
+  - 追跡対象例: `role`, `selected_ai_setting_id`, `fallback_chain`, `selection_reason`。
+- ただし現フェーズでは実装しない（設計境界のみ保持）。
+  - 現フェーズの実装は引き続き「既定AI 1件」を正とする。
+
+この境界を越える仕様追加は、次フェーズ文書へ分離して管理する。
+
 ## PR Up（「PRあげてください」運用）
 
 ### 目的

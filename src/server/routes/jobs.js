@@ -7,6 +7,7 @@ const { createPlanWriter } = require("../../plans/writer");
 const { readIngestArtifact, buildPlan, buildJobFromPlan } = require("../../plans/figmaToJob");
 const { generatePatchFromJob } = require("../../ai/generatePatch");
 const { writePatchArtifact } = require("../../patch/format");
+const { parseRunIdInput, toPublicRunId } = require("../../api/runs");
 let updateRunTrace = null;
 try {
   ({ updateRunTrace } = require("../../db/runTrace"));
@@ -37,7 +38,15 @@ async function handleJobsFromFigma(req, res) {
     });
   }
 
-  const runId = typeof body.run_id === "string" && body.run_id.trim() ? body.run_id.trim() : crypto.randomUUID();
+  const runIdInput = typeof body.run_id === "string" && body.run_id.trim() ? body.run_id.trim() : "";
+  let runId = crypto.randomUUID();
+  if (runIdInput) {
+    const parsed = parseRunIdInput(runIdInput);
+    if (!parsed.ok) {
+      return jsonError(res, parsed.status || 400, parsed.code || "VALIDATION_ERROR", parsed.message || "run_id format is invalid", parsed.details || { failure_code: "validation_error" });
+    }
+    runId = parsed.internalId;
+  }
   const ingestPath = typeof body.ingest_artifact_path === "string" ? body.ingest_artifact_path.trim() : "";
   const writer = createPlanWriter(runId);
 
@@ -91,7 +100,7 @@ async function handleJobsFromFigma(req, res) {
     writer.appendLog("patch artifact generated");
 
     return sendJson(res, 201, {
-      run_id: runId,
+      run_id: toPublicRunId(runId),
       plan_path: `.ai-runs/${runId}/plan.json`,
       plan_log_path: `.ai-runs/${runId}/plan.log`,
       job_path: jobPath,

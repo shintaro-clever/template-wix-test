@@ -1,5 +1,7 @@
 const crypto = require("crypto");
 const { DEFAULT_TENANT } = require("../db");
+const { KINDS, buildPublicId, parsePublicIdFor, isUuid } = require("../id/publicIds");
+const { parseRunIdInput, toPublicRunId } = require("../api/runs");
 
 function validationError(message, details = {}) {
   const merged = { failure_code: "validation_error", ...details };
@@ -34,8 +36,39 @@ function normalizeBody(input) {
   return typeof input === "string" ? input.trim() : "";
 }
 
+function normalizeRole(input) {
+  const role = typeof input === "string" ? input.trim().toLowerCase() : "";
+  return role;
+}
+
 function normalizeTitle(input) {
   return typeof input === "string" ? input.trim() : "";
+}
+
+function summarizeMessage(content, max = 120) {
+  const text = normalizeBody(content).replace(/\s+/g, " ");
+  if (!text) return "";
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}…`;
+}
+
+function toPublicThreadId(internalId) {
+  return isUuid(internalId) ? buildPublicId(KINDS.thread, internalId) : internalId;
+}
+
+function parseThreadIdInput(threadId) {
+  const id = normalizeId(threadId);
+  if (!id) {
+    throw validationError("thread_id is required");
+  }
+  if (isUuid(id)) {
+    return { internalId: id, publicId: toPublicThreadId(id), mode: "legacy_uuid" };
+  }
+  const parsed = parsePublicIdFor(KINDS.thread, id);
+  if (!parsed.ok) {
+    throw validationError(parsed.message || "thread_id format is invalid", parsed.details || {});
+  }
+  return { internalId: parsed.internalId, publicId: parsed.publicId, mode: "public_id" };
 }
 
 function createThread(db, projectId, title) {
@@ -62,7 +95,7 @@ function createThread(db, projectId, title) {
     "INSERT INTO project_threads(tenant_id,id,project_id,title,created_at,updated_at) VALUES(?,?,?,?,?,?)"
   ).run(DEFAULT_TENANT, threadId, id, normalizedTitle, now, now);
 
-  return { thread_id: threadId, project_id: id, title: normalizedTitle, created_at: now, updated_at: now };
+  return { thread_id: toPublicThreadId(threadId), project_id: id, title: normalizedTitle, created_at: now, updated_at: now };
 }
 
 function listThreadsByProject(db, projectId) {
@@ -86,7 +119,28 @@ function listThreadsByProject(db, projectId) {
            SELECT MAX(m.created_at)
            FROM thread_messages m
            WHERE m.tenant_id = t.tenant_id AND m.thread_id = t.id
-         ) AS last_message_at
+         ) AS last_message_at,
+         (
+           SELECT COALESCE(NULLIF(m.content, ''), m.body, '')
+           FROM thread_messages m
+           WHERE m.tenant_id = t.tenant_id AND m.thread_id = t.id
+           ORDER BY m.created_at DESC
+           LIMIT 1
+         ) AS latest_message_content,
+         (
+           SELECT COALESCE(NULLIF(m.role, ''), CASE WHEN lower(COALESCE(m.author, ''))='assistant' THEN 'assistant' ELSE 'user' END)
+           FROM thread_messages m
+           WHERE m.tenant_id = t.tenant_id AND m.thread_id = t.id
+           ORDER BY m.created_at DESC
+           LIMIT 1
+         ) AS latest_message_role,
+         (
+           SELECT m.created_at
+           FROM thread_messages m
+           WHERE m.tenant_id = t.tenant_id AND m.thread_id = t.id
+           ORDER BY m.created_at DESC
+           LIMIT 1
+         ) AS latest_message_created_at
        FROM project_threads t
        WHERE t.tenant_id = ? AND t.project_id = ?
        ORDER BY t.updated_at DESC`
@@ -94,21 +148,22 @@ function listThreadsByProject(db, projectId) {
     .all(DEFAULT_TENANT, id);
   return {
     threads: rows.map((row) => ({
-      thread_id: row.thread_id,
+      thread_id: toPublicThreadId(row.thread_id),
       project_id: row.project_id,
       title: row.title,
       updated_at: row.updated_at,
       message_count: Number(row.message_count || 0),
       last_message_at: row.last_message_at || null,
+      latest_summary: summarizeMessage(row.latest_message_content),
+      latest_message_role: normalizeRole(row.latest_message_role) || null,
+      latest_message_created_at: row.latest_message_created_at || null,
     })),
   };
 }
 
 function getThread(db, threadId) {
-  const id = normalizeId(threadId);
-  if (!id) {
-    throw validationError("thread_id is required");
-  }
+  const parsed = parseThreadIdInput(threadId);
+  const id = parsed.internalId;
   const row = db
     .prepare(
       `SELECT id AS thread_id, project_id, title, updated_at
@@ -122,7 +177,7 @@ function getThread(db, threadId) {
   }
   const messages = db
     .prepare(
-      `SELECT id AS message_id, author, body, created_at
+      `SELECT id AS message_id, author, body, role, content, run_id, created_at
        FROM thread_messages
        WHERE tenant_id = ? AND thread_id = ?
        ORDER BY created_at ASC`
@@ -130,12 +185,16 @@ function getThread(db, threadId) {
     .all(DEFAULT_TENANT, id);
   return {
     thread: {
-      thread_id: row.thread_id,
+      thread_id: toPublicThreadId(row.thread_id),
       project_id: row.project_id,
       title: row.title,
       updated_at: row.updated_at,
       messages: messages.map((message) => ({
         message_id: message.message_id,
+        role: normalizeRole(message.role) || (normalizeRole(message.author) === "assistant" ? "assistant" : "user"),
+        content: normalizeBody(message.content) || normalizeBody(message.body),
+        run_id: isUuid(message.run_id) ? toPublicRunId(message.run_id) : (normalizeBody(message.run_id) || null),
+        // backward compatibility for existing UI/tests
         author: message.author,
         body: message.body,
         created_at: message.created_at,
@@ -145,16 +204,28 @@ function getThread(db, threadId) {
 }
 
 function postMessage(db, threadId, payload = {}, actor = null) {
-  const id = normalizeId(threadId);
-  if (!id) {
-    throw validationError("thread_id is required");
+  const parsed = parseThreadIdInput(threadId);
+  const id = parsed.internalId;
+  const content = normalizeBody(payload && (payload.content !== undefined ? payload.content : payload.body));
+  if (!content) {
+    throw validationError("content is required");
   }
-  const body = normalizeBody(payload && payload.body);
-  if (!body) {
-    throw validationError("body is required");
+  if (content.length > 4000) {
+    throw validationError("content too long");
   }
-  if (body.length > 4000) {
-    throw validationError("body too long");
+  const roleInput = normalizeRole(payload && payload.role);
+  const role = roleInput || "user";
+  if (!["user", "assistant"].includes(role)) {
+    throw validationError("role is invalid");
+  }
+  const runIdInput = normalizeBody(payload && payload.run_id);
+  let internalRunId = null;
+  if (runIdInput) {
+    const parsedRunId = parseRunIdInput(runIdInput);
+    if (!parsedRunId.ok) {
+      throw validationError(parsedRunId.message || "run_id format is invalid", parsedRunId.details || {});
+    }
+    internalRunId = parsedRunId.internalId;
   }
 
   const existing = db
@@ -168,8 +239,8 @@ function postMessage(db, threadId, payload = {}, actor = null) {
   const messageId = crypto.randomUUID();
   const author = typeof actor === "string" && actor.trim() ? actor.trim() : "user";
   db.prepare(
-    "INSERT INTO thread_messages(tenant_id,id,thread_id,author,body,created_at) VALUES(?,?,?,?,?,?)"
-  ).run(DEFAULT_TENANT, messageId, id, author, body, createdAt);
+    "INSERT INTO thread_messages(tenant_id,id,thread_id,author,body,role,content,run_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)"
+  ).run(DEFAULT_TENANT, messageId, id, author, content, role, content, internalRunId, createdAt);
   db.prepare("UPDATE project_threads SET updated_at = ? WHERE tenant_id = ? AND id = ?").run(
     createdAt,
     DEFAULT_TENANT,
@@ -178,11 +249,22 @@ function postMessage(db, threadId, payload = {}, actor = null) {
   return { message_id: messageId };
 }
 
+function getThreadProjectId(db, threadId) {
+  const parsed = parseThreadIdInput(threadId);
+  const row = db
+    .prepare("SELECT project_id FROM project_threads WHERE tenant_id = ? AND id = ? LIMIT 1")
+    .get(DEFAULT_TENANT, parsed.internalId);
+  return row ? row.project_id : null;
+}
+
 module.exports = {
   createThread,
   listThreadsByProject,
   getThread,
   postMessage,
+  getThreadProjectId,
+  toPublicThreadId,
+  parseThreadIdInput,
   validationError,
   notFoundError,
 };

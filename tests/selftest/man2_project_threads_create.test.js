@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { createApiServer } = require("../../src/server/apiApp");
 const { db, DEFAULT_TENANT } = require("../../src/db");
+const { parsePublicIdFor, KINDS, isUuid } = require("../../src/id/publicIds");
 const { assert, requestLocal } = require("./_helpers");
 
 async function run() {
@@ -34,7 +35,9 @@ async function run() {
     });
     assert(projRes.statusCode === 201, `project create should return 201, got ${projRes.statusCode}`);
     const project = JSON.parse(projRes.body.toString("utf8"));
-    createdProjectIds.push(project.id);
+    const parsedProject = parsePublicIdFor(KINDS.project, project.id);
+    assert(parsedProject.ok, "project.id should be public project ID");
+    createdProjectIds.push(parsedProject.internalId);
     const pid = project.id;
 
     // 1. POST /api/projects/:id/threads 正常系 → 201
@@ -47,6 +50,7 @@ async function run() {
     assert(createRes.statusCode === 201, `POST threads should return 201, got ${createRes.statusCode}`);
     const created = JSON.parse(createRes.body.toString("utf8"));
     assert(created.thread_id, "response should have thread_id");
+    assert(/^thread_[0-9a-f-]{36}$/i.test(created.thread_id), "thread_id should be public thread ID");
     assert(created.project_id === pid, "response project_id should match");
     assert(created.title === "最初のスレッド", "response title should match");
     assert(created.created_at, "response should have created_at");
@@ -85,6 +89,14 @@ async function run() {
     assert(msgRes.statusCode === 201, `POST message should return 201, got ${msgRes.statusCode}`);
     const msgBody = JSON.parse(msgRes.body.toString("utf8"));
     assert(msgBody.message_id, "response should have message_id");
+
+    // 4.5 unknown prefix thread id → 400 validation_error
+    const invalidThreadPrefix = await requestLocal(handler, {
+      method: "GET",
+      url: `/api/threads/workspace_${crypto.randomUUID()}`,
+      headers: { Authorization: `Bearer ${jwtToken}` },
+    });
+    assert(invalidThreadPrefix.statusCode === 400, `unknown thread prefix should return 400, got ${invalidThreadPrefix.statusCode}`);
 
     // 5. 空タイトル → 400
     const emptyTitle = await requestLocal(handler, {
@@ -125,9 +137,10 @@ async function run() {
     createdThreadIds.push(maxCreated.thread_id);
 
     // 9. 存在しないプロジェクト → 404
+    const notFoundProjectId = `project_${crypto.randomUUID()}`;
     const notFoundRes = await requestLocal(handler, {
       method: "POST",
-      url: `/api/projects/nonexistent-project-xyz/threads`,
+      url: `/api/projects/${notFoundProjectId}/threads`,
       headers: authz,
       body: JSON.stringify({ title: "test" }),
     });
@@ -146,8 +159,11 @@ async function run() {
     createdThreadIds.push(trimCreated.thread_id);
   } finally {
     createdThreadIds.forEach((id) => {
-      db.prepare("DELETE FROM thread_messages WHERE tenant_id=? AND thread_id=?").run(DEFAULT_TENANT, id);
-      db.prepare("DELETE FROM project_threads WHERE tenant_id=? AND id=?").run(DEFAULT_TENANT, id);
+      const parsed = parsePublicIdFor(KINDS.thread, id);
+      const internalId = parsed.ok ? parsed.internalId : (isUuid(id) ? id : null);
+      if (!internalId) return;
+      db.prepare("DELETE FROM thread_messages WHERE tenant_id=? AND thread_id=?").run(DEFAULT_TENANT, internalId);
+      db.prepare("DELETE FROM project_threads WHERE tenant_id=? AND id=?").run(DEFAULT_TENANT, internalId);
     });
     createdProjectIds.forEach((id) => {
       db.prepare("DELETE FROM projects WHERE tenant_id=? AND id=?").run(DEFAULT_TENANT, id);

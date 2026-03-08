@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS projects (
   description TEXT,
   staging_url TEXT NOT NULL,
   drive_folder_id TEXT,
+  project_shared_env_json TEXT,
   project_bindings_json TEXT,
   project_drive_json TEXT,
   created_at  TEXT NOT NULL,
@@ -27,6 +28,8 @@ CREATE TABLE IF NOT EXISTS runs (
   tenant_id    TEXT NOT NULL DEFAULT 'internal',
   id           TEXT NOT NULL,
   project_id   TEXT NOT NULL,
+  thread_id    TEXT,
+  ai_setting_id TEXT,
   status       TEXT NOT NULL,
   inputs_json  TEXT NOT NULL,
   failure_code TEXT,
@@ -58,7 +61,25 @@ CREATE TABLE IF NOT EXISTS thread_messages (
   thread_id   TEXT NOT NULL,
   author      TEXT NOT NULL,
   body        TEXT NOT NULL,
+  role        TEXT,
+  content     TEXT,
+  run_id      TEXT,
   created_at  TEXT NOT NULL,
+  PRIMARY KEY (tenant_id, id)
+);
+
+CREATE TABLE IF NOT EXISTS personal_ai_settings (
+  tenant_id    TEXT NOT NULL DEFAULT 'internal',
+  id           TEXT NOT NULL,
+  user_id      TEXT NOT NULL,
+  provider     TEXT NOT NULL,
+  model        TEXT NOT NULL,
+  secret_ref   TEXT,
+  config_json  TEXT,
+  enabled      INTEGER NOT NULL DEFAULT 1,
+  is_default   INTEGER NOT NULL DEFAULT 0,
+  created_at   TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
   PRIMARY KEY (tenant_id, id)
 );
 
@@ -104,3 +125,6 @@ CREATE INDEX IF NOT EXISTS project_threads_project_updated
 
 CREATE INDEX IF NOT EXISTS thread_messages_thread_created
   ON thread_messages(tenant_id, thread_id, created_at);
+
+CREATE INDEX IF NOT EXISTS personal_ai_settings_user
+  ON personal_ai_settings(tenant_id, user_id, updated_at DESC);

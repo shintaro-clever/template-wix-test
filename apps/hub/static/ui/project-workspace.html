@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html class="dark" lang="ja">
+<head>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+  <title>Orchestrator AI - Project Workspace</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = { darkMode:"class", theme:{ extend:{ colors:{
+      primary:"#a55c50","background-light":"#f7f6f6","background-dark":"#1d1615",
+      "card-dark":"#251f1e","border-dark":"#3d3432","text-muted":"#b1a7a5"
+    }, fontFamily:{display:["Inter","sans-serif"]}, borderRadius:{DEFAULT:"0.25rem",lg:"0.5rem",xl:"0.75rem",full:"9999px"} } } };
+  </script>
+  <style>
+    body{font-family:'Inter',"Noto Sans JP",sans-serif;}
+    .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;}
+    .custom-scrollbar::-webkit-scrollbar{width:6px;height:6px;}
+    .custom-scrollbar::-webkit-scrollbar-thumb{background:#3d3432;border-radius:10px;}
+  </style>
+</head>
+<body data-page="projects" class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex overflow-hidden">
+  <aside class="w-64 flex-shrink-0 border-r border-primary/10 bg-background-dark flex flex-col h-screen">
+    <div class="p-6 flex items-center gap-3">
+      <div class="w-8 h-8 rounded bg-primary flex items-center justify-center text-white">
+        <span class="material-symbols-outlined text-xl">auto_fix</span>
+      </div>
+      <h1 class="text-lg font-bold tracking-tight text-white">Orchestrator AI</h1>
+    </div>
+    <nav class="flex-1 px-4 py-2 space-y-1 overflow-y-auto custom-scrollbar">
+      <div class="pb-4">
+        <p class="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2" data-i18n="nav.menu">メニュー</p>
+        <a data-nav-key="dashboard" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/dashboard.html">
+          <span class="material-symbols-outlined">dashboard</span>
+          <span class="text-sm font-medium" data-i18n="nav.dashboard">ダッシュボード</span>
+        </a>
+        <a data-nav-key="projects" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/projects.html">
+          <span class="material-symbols-outlined">folder</span>
+          <span class="text-sm font-medium" data-i18n="nav.projects">プロジェクト</span>
+        </a>
+        <a data-nav-key="analytics" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/analytics.html">
+          <span class="material-symbols-outlined">bar_chart</span>
+          <span class="text-sm font-medium" data-i18n="nav.analytics">アナリティクス</span>
+        </a>
+        <a data-nav-key="settings" class="flex items-center gap-3 px-3 py-2 text-slate-400 hover:text-white hover:bg-primary/10 rounded-lg transition-colors" href="/ui/settings.html">
+          <span class="material-symbols-outlined">settings</span>
+          <span class="text-sm font-medium" data-i18n="nav.settings">設定</span>
+        </a>
+      </div>
+    </nav>
+  </aside>
+
+  <main class="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
+    <header class="h-16 border-b border-border-dark px-6 md:px-8 flex items-center justify-between bg-background-light/50 dark:bg-background-dark/50 backdrop-blur-md z-10">
+      <h2 class="text-xl font-bold" data-i18n="ui.workspace.title">AI Workspace</h2>
+      <a id="workspace-back" href="/ui/project.html" class="inline-flex items-center gap-2 text-sm font-semibold text-primary hover:underline">
+        <span class="material-symbols-outlined text-base">arrow_back</span>
+        <span data-i18n="ui.workspace.back">Project概要へ戻る</span>
+      </a>
+    </header>
+
+    <div class="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar space-y-4">
+      <section class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-xs text-text-muted" data-i18n="ui.workspace.aiStatus">個人AI設定</p>
+          <p id="workspace-ai-status" class="text-sm font-semibold">-</p>
+          <p id="workspace-ai-setting-id" class="mt-1 text-[11px] font-mono text-text-muted break-all">-</p>
+          <p id="workspace-ai-setting-meta" class="mt-1 text-[11px] text-text-muted">-</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <a id="workspace-ai-link" href="/ui/settings-ai.html" class="px-3 py-2 rounded-lg border border-border-dark text-sm hover:bg-slate-100 dark:hover:bg-background-dark/80" data-i18n="ui.workspace.openAiSettings">AI設定を開く</a>
+          <a id="workspace-project-settings-link" href="/ui/project-settings.html" class="px-3 py-2 rounded-lg border border-border-dark text-sm hover:bg-slate-100 dark:hover:bg-background-dark/80" data-i18n="ui.workspace.openProjectSettings">プロジェクト設定</a>
+        </div>
+      </section>
+
+      <section class="grid grid-cols-1 xl:grid-cols-[18rem_minmax(0,1fr)_20rem] gap-4">
+        <aside class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-4">
+          <div class="flex items-center justify-between gap-2">
+            <h3 class="text-sm font-semibold" data-i18n="ui.workspace.threads">Threads</h3>
+            <div class="flex items-center gap-2">
+              <button id="workspace-new-conversation" type="button" class="inline-flex items-center gap-1 px-2 py-1 rounded border border-border-dark text-xs hover:bg-slate-100 dark:hover:bg-background-dark/80" data-i18n="ui.workspace.newConversation">新規会話</button>
+              <a id="workspace-thread-detail-link" href="/ui/project-thread.html" class="text-xs text-primary hover:underline" data-i18n="ui.workspace.openThreadPage">Thread Debug</a>
+            </div>
+          </div>
+          <p id="workspace-thread-feedback" class="mt-2 text-xs text-text-muted" data-i18n="common.loading">読み込み中</p>
+          <div id="workspace-thread-list" class="mt-3 space-y-2 max-h-[28rem] overflow-y-auto custom-scrollbar"></div>
+        </aside>
+
+        <section class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-4 flex flex-col min-h-[28rem]">
+          <div class="flex items-center justify-between gap-3 border-b border-border-dark pb-3">
+            <div>
+              <p class="text-xs text-text-muted" data-i18n="ui.workspace.activeThread">現在のスレッド</p>
+              <p id="workspace-active-thread" class="text-sm font-semibold">-</p>
+            </div>
+            <a id="workspace-runs-link" href="/ui/project-runs.html" class="text-xs text-primary hover:underline" data-i18n="ui.workspace.openRuns">Runsを見る</a>
+          </div>
+
+          <div id="workspace-timeline" class="flex-1 overflow-y-auto custom-scrollbar py-4 space-y-3">
+            <p class="text-sm text-text-muted" data-i18n="ui.workspace.timelineHint">スレッドを選択すると会話履歴が表示されます。</p>
+          </div>
+
+          <form id="workspace-form" class="border-t border-border-dark pt-3 space-y-2">
+            <label for="workspace-input" class="text-xs text-text-muted" data-i18n="ui.workspace.promptLabel">AIへの依頼 / 質問</label>
+            <textarea id="workspace-input" class="w-full h-32 rounded-lg border border-border-dark bg-background-light dark:bg-background-dark p-3 text-sm" data-i18n-placeholder="ui.workspace.inputPlaceholder" placeholder="AIに依頼内容を入力"></textarea>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span id="workspace-run-state" class="hidden text-[11px] px-2 py-0.5 rounded border border-border-dark text-text-muted"></span>
+                <p id="workspace-post-status" class="text-xs text-text-muted"></p>
+              </div>
+              <button id="workspace-send" type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed" data-i18n="ui.workspace.send">
+                <span class="material-symbols-outlined text-base">send</span>
+                <span data-i18n="ui.workspace.send">AIに依頼</span>
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <aside class="bg-white dark:bg-card-dark border border-border-dark rounded-xl p-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold" data-i18n="ui.workspace.sharedEnv">共有環境サマリ</h3>
+            <a id="workspace-settings-link" href="/ui/project-settings.html" class="text-xs text-primary hover:underline" data-i18n="ui.workspace.editSharedEnv">編集</a>
+          </div>
+          <dl class="mt-3 space-y-3 text-sm">
+            <div>
+              <dt class="text-xs text-text-muted">GitHub</dt>
+              <dd id="workspace-github" class="mt-1 break-all">-</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-text-muted">Figma</dt>
+              <dd id="workspace-figma" class="mt-1 break-all">-</dd>
+            </div>
+            <div>
+              <dt class="text-xs text-text-muted">Drive</dt>
+              <dd id="workspace-drive" class="mt-1 break-all">-</dd>
+            </div>
+          </dl>
+          <div class="mt-4 border-t border-border-dark pt-4">
+            <div class="flex items-center justify-between gap-2">
+              <h4 class="text-sm font-semibold" data-i18n="ui.workspace.recentRuns">最近のRuns</h4>
+              <a id="workspace-runs-side-link" href="/ui/project-runs.html" class="text-xs text-primary hover:underline" data-i18n="ui.workspace.openRuns">Runsを見る</a>
+            </div>
+            <div id="workspace-runs-list" class="mt-2 space-y-2"></div>
+          </div>
+        </aside>
+      </section>
+    </div>
+  </main>
+
+  <script src="/ui/sidebar.js"></script>
+  <script src="/ui/i18n/i18n.js" defer></script>
+  <script type="module">
+    import { apiGet, apiPost, isPrefixedId, t } from "/ui/api.js";
+
+    const params = new URLSearchParams(window.location.search || "");
+    const rawProjectId = (params.get("project_id") || "").trim();
+    const projectId = isPrefixedId("project", rawProjectId) ? rawProjectId : "";
+    let activeThreadId = isPrefixedId("thread", (params.get("thread_id") || "").trim()) ? params.get("thread_id").trim() : "";
+
+    const backLink = document.getElementById("workspace-back");
+    const aiStatus = document.getElementById("workspace-ai-status");
+    const aiSettingIdEl = document.getElementById("workspace-ai-setting-id");
+    const aiSettingMetaEl = document.getElementById("workspace-ai-setting-meta");
+    const aiLink = document.getElementById("workspace-ai-link");
+    const projectSettingsLink = document.getElementById("workspace-project-settings-link");
+    const settingsLink = document.getElementById("workspace-settings-link");
+    const threadDetailLink = document.getElementById("workspace-thread-detail-link");
+    const runsLink = document.getElementById("workspace-runs-link");
+    const runsSideLink = document.getElementById("workspace-runs-side-link");
+    const threadFeedback = document.getElementById("workspace-thread-feedback");
+    const threadList = document.getElementById("workspace-thread-list");
+    const newConversationButton = document.getElementById("workspace-new-conversation");
+    const activeThreadText = document.getElementById("workspace-active-thread");
+    const timeline = document.getElementById("workspace-timeline");
+    const postStatus = document.getElementById("workspace-post-status");
+    const runState = document.getElementById("workspace-run-state");
+    const form = document.getElementById("workspace-form");
+    const input = document.getElementById("workspace-input");
+    const sendButton = document.getElementById("workspace-send");
+    const githubEl = document.getElementById("workspace-github");
+    const figmaEl = document.getElementById("workspace-figma");
+    const driveEl = document.getElementById("workspace-drive");
+    const runsList = document.getElementById("workspace-runs-list");
+
+    function updateProjectLinks() {
+      const links = [backLink, projectSettingsLink, settingsLink, threadDetailLink, runsLink, runsSideLink];
+      links.forEach((el) => {
+        if (!el) return;
+        const url = new URL(el.getAttribute("href") || "", window.location.origin);
+        if (projectId) url.searchParams.set("project_id", projectId);
+        if (el === threadDetailLink && activeThreadId) {
+          url.searchParams.set("thread_id", activeThreadId);
+        }
+        el.setAttribute("href", `${url.pathname}${url.search}`);
+      });
+    }
+
+    function setActiveThread(nextId) {
+      activeThreadId = isPrefixedId("thread", nextId || "") ? nextId : "";
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.set("project_id", projectId);
+      if (activeThreadId) nextUrl.searchParams.set("thread_id", activeThreadId);
+      else nextUrl.searchParams.delete("thread_id");
+      window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}`);
+      updateProjectLinks();
+    }
+
+    function renderThreads(rows) {
+      threadList.innerHTML = "";
+      const list = Array.isArray(rows) ? rows : [];
+      if (!list.length) {
+        threadFeedback.textContent = "Thread がまだありません";
+        return;
+      }
+      threadFeedback.textContent = "";
+      list.forEach((row) => {
+        const id = String(row.thread_id || "");
+        const summary = String(row.latest_summary || "").trim();
+        const updatedAt = String(row.updated_at || row.latest_message_created_at || "-");
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = `w-full text-left rounded-lg border px-3 py-2 text-sm ${id === activeThreadId ? "border-primary bg-primary/10" : "border-border-dark hover:border-primary/40"}`;
+        btn.innerHTML = `
+          <p class="font-semibold truncate">${String(row.title || id || "-")}</p>
+          <p class="mt-1 text-xs text-text-muted break-words">${summary || "..."}</p>
+          <div class="mt-1 flex items-center justify-between gap-2">
+            <p class="text-[11px] text-text-muted font-mono truncate">${id}</p>
+            <p class="text-[11px] text-text-muted font-mono whitespace-nowrap">${updatedAt}</p>
+          </div>
+        `;
+        btn.addEventListener("click", async () => {
+          setActiveThread(id);
+          renderThreads(list);
+          await loadThreadDetail();
+        });
+        threadList.appendChild(btn);
+      });
+    }
+
+    function renderTimeline(messages) {
+      timeline.innerHTML = "";
+      const rows = Array.isArray(messages) ? messages : [];
+      if (!rows.length) {
+        timeline.innerHTML = `<p class="text-sm text-text-muted">${"まだ会話がありません。AIへの依頼を送信するとここに表示されます。"}</p>`;
+        return;
+      }
+      rows.forEach((m) => {
+        const role = String(m.role || "user");
+        const wrap = document.createElement("div");
+        wrap.className = role === "assistant" ? "flex justify-start" : "flex justify-end";
+        const box = document.createElement("article");
+        box.className = `w-full max-w-[90%] rounded-lg border p-3 ${role === "assistant" ? "border-indigo-300/50 bg-indigo-50/60 dark:bg-indigo-950/20" : "border-emerald-300/50 bg-emerald-50/60 dark:bg-emerald-950/20"}`;
+        box.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-xs font-semibold uppercase tracking-wide ${role === "assistant" ? "text-indigo-700 dark:text-indigo-300" : "text-emerald-700 dark:text-emerald-300"}">${role === "assistant" ? "assistant" : "user"}</p>
+            <p class="text-[11px] font-mono text-text-muted">${String(m.created_at || "-")}</p>
+          </div>
+          <p class="mt-2 text-sm whitespace-pre-wrap break-words">${String(m.content || m.body || "-")}</p>
+        `;
+        wrap.appendChild(box);
+        timeline.appendChild(wrap);
+      });
+      timeline.scrollTop = timeline.scrollHeight;
+    }
+
+    async function setRunState(kind = "") {
+      if (!runState) return;
+      runState.className = "text-[11px] px-2 py-0.5 rounded border";
+      if (!kind) {
+        runState.classList.add("hidden");
+        runState.textContent = "";
+        return;
+      }
+      runState.classList.remove("hidden");
+      if (kind === "sending") {
+        runState.classList.add("border-amber-400/40", "text-amber-700", "dark:text-amber-300");
+        runState.textContent = await t("ui.workspace.state.sending");
+        return;
+      }
+      if (kind === "responding") {
+        runState.classList.add("border-indigo-400/40", "text-indigo-700", "dark:text-indigo-300");
+        runState.textContent = await t("ui.workspace.state.responding");
+        return;
+      }
+      if (kind === "failed") {
+        runState.classList.add("border-rose-400/40", "text-rose-700", "dark:text-rose-300");
+        runState.textContent = await t("ui.workspace.state.failed");
+        return;
+      }
+      if (kind === "done") {
+        runState.classList.add("border-emerald-400/40", "text-emerald-700", "dark:text-emerald-300");
+        runState.textContent = await t("ui.workspace.state.done");
+      }
+    }
+
+    async function loadSharedEnvironment() {
+      try {
+        const settings = await apiGet(`/projects/${encodeURIComponent(projectId)}/settings`);
+        githubEl.textContent = String(settings.github_repository || "-");
+        figmaEl.textContent = String(settings.figma_file || "-");
+        driveEl.textContent = String(settings.drive_url || "-");
+      } catch {
+        githubEl.textContent = "-";
+        figmaEl.textContent = "-";
+        driveEl.textContent = "-";
+      }
+    }
+
+    function renderRecentRuns(runs) {
+      runsList.innerHTML = "";
+      const rows = Array.isArray(runs) ? runs.slice(0, 5) : [];
+      if (!rows.length) {
+        const empty = document.createElement("p");
+        empty.className = "text-xs text-text-muted";
+        t("ui.workspace.runsEmpty").then((text) => { empty.textContent = text; });
+        runsList.appendChild(empty);
+        return;
+      }
+      rows.forEach((run) => {
+        const status = String(run.status || "-");
+        const runId = String(run.run_id || "-");
+        const updatedAt = String(run.updated_at || run.created_at || "-");
+        const card = document.createElement("article");
+        card.className = "rounded-lg border border-border-dark p-2";
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-2">
+            <a href="/ui/run.html?run_id=${encodeURIComponent(runId)}" class="text-xs font-mono text-primary hover:underline truncate">${runId}</a>
+            <span class="text-[11px] px-2 py-0.5 rounded border ${status === "failed" ? "border-rose-400/40 text-rose-600 dark:text-rose-300" : status === "succeeded" ? "border-emerald-400/40 text-emerald-700 dark:text-emerald-300" : "border-border-dark text-text-muted"}">${status}</span>
+          </div>
+          <p class="mt-1 text-[11px] font-mono text-text-muted">${updatedAt}</p>
+        `;
+        runsList.appendChild(card);
+      });
+    }
+
+    async function loadRecentRuns() {
+      try {
+        const payload = await apiGet(`/projects/${encodeURIComponent(projectId)}/runs`);
+        renderRecentRuns(payload && Array.isArray(payload.runs) ? payload.runs : []);
+      } catch {
+        renderRecentRuns([]);
+      }
+    }
+
+    async function loadAiStatus() {
+      try {
+        const payload = await apiGet("/me/ai-settings/default");
+        const item = payload && payload.item ? payload.item : null;
+        if (!item) {
+          aiStatus.textContent = await t("ui.workspace.aiUnset");
+          aiSettingIdEl.textContent = await t("ui.workspace.aiSettingIdUnset");
+          aiSettingMetaEl.textContent = await t("ui.workspace.aiMetaUnset");
+          return;
+        }
+        aiStatus.textContent = `${String(item.provider || "-")} / ${String(item.model || "-")}`;
+        aiSettingIdEl.textContent = `${await t("ui.workspace.aiSettingIdLabel")}: ${String(item.ai_setting_id || "-")}`;
+        const enabled = item.enabled ? await t("ui.workspace.aiEnabled") : await t("ui.workspace.aiDisabled");
+        const defaultTag = item.is_default ? await t("ui.workspace.aiDefault") : await t("ui.workspace.aiNonDefault");
+        aiSettingMetaEl.textContent = `${enabled} / ${defaultTag}`;
+      } catch {
+        aiStatus.textContent = await t("common.error");
+        aiSettingIdEl.textContent = "-";
+        aiSettingMetaEl.textContent = "-";
+      }
+    }
+
+    async function loadThreadDetail() {
+      if (!activeThreadId) {
+        activeThreadText.textContent = "-";
+        renderTimeline([]);
+        return;
+      }
+      try {
+        const detail = await apiGet(`/threads/${encodeURIComponent(activeThreadId)}`);
+        const thread = detail && detail.thread ? detail.thread : null;
+        activeThreadText.textContent = thread ? String(thread.title || activeThreadId) : activeThreadId;
+        renderTimeline(thread && Array.isArray(thread.messages) ? thread.messages : []);
+      } catch {
+        renderTimeline([]);
+      }
+    }
+
+    async function loadThreads() {
+      try {
+        const payload = await apiGet(`/projects/${encodeURIComponent(projectId)}/threads`);
+        const rows = Array.isArray(payload && payload.threads) ? payload.threads : [];
+        if (!activeThreadId && rows[0] && isPrefixedId("thread", rows[0].thread_id)) {
+          setActiveThread(rows[0].thread_id);
+        }
+        renderThreads(rows);
+      } catch {
+        threadFeedback.textContent = await t("common.error");
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (sendButton && sendButton.disabled) return;
+      const content = String(input.value || "").trim();
+      if (!content) {
+        postStatus.textContent = await t("ui.workspace.inputRequired");
+        return;
+      }
+      if (sendButton) sendButton.disabled = true;
+      await setRunState("sending");
+      postStatus.textContent = await t("common.loading");
+      try {
+        const usedChatApi = Boolean(activeThreadId);
+        const result = usedChatApi
+          ? await apiPost(`/projects/${encodeURIComponent(projectId)}/threads/${encodeURIComponent(activeThreadId)}/chat`, { content })
+          : await apiPost(`/projects/${encodeURIComponent(projectId)}/workspace/messages`, { content });
+        await setRunState("responding");
+        input.value = "";
+        if (result && isPrefixedId("thread", result.thread_id || "")) {
+          setActiveThread(result.thread_id);
+        }
+        await loadThreads();
+        await loadThreadDetail();
+        if (usedChatApi) {
+          const sentBase = await t("ui.workspace.chatContinued");
+          const status = result && typeof result.status === "string" ? result.status : "queued";
+          postStatus.textContent = `${sentBase} (${status})`;
+          if (status === "failed") {
+            await setRunState("failed");
+          } else {
+            await setRunState("done");
+          }
+        } else {
+          postStatus.textContent = await t("ui.workspace.sent");
+          await setRunState("done");
+        }
+      } catch (e) {
+        await setRunState("failed");
+        const base = await t("common.error");
+        const suffix = activeThreadId ? await t("ui.workspace.chatFailed") : "";
+        postStatus.textContent = `${base}${suffix ? ` (${suffix})` : ""}: ${String(e && e.message ? e.message : "failed")}`;
+      } finally {
+        if (sendButton) sendButton.disabled = false;
+      }
+    });
+
+    newConversationButton.addEventListener("click", async () => {
+      setActiveThread("");
+      activeThreadText.textContent = await t("ui.workspace.newConversationMode");
+      renderTimeline([]);
+      await setRunState("");
+      postStatus.textContent = await t("ui.projectThread.startConversationHint");
+      input.focus();
+      await loadThreads();
+    });
+
+    async function bootstrap() {
+      updateProjectLinks();
+      if (!projectId) {
+        threadFeedback.textContent = await t("ui.project.missingId");
+        return;
+      }
+      await Promise.all([loadAiStatus(), loadSharedEnvironment(), loadThreads(), loadRecentRuns()]);
+      await loadThreadDetail();
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>

@@ -12,6 +12,8 @@ const { withRetry } = require("../db/retry");
 const { recordAudit, AUDIT_ACTIONS } = require("../middleware/audit");
 const { emitAuditEvent } = require("../audit/events");
 const { sendJson, jsonError, readJsonBody } = require("../api/projects");
+const { toPublicRunId } = require("../api/runs");
+const { loadProjectSharedContext } = require("../server/projectSharedContext");
 
 const runJobScript = path.join(__dirname, "..", "..", "scripts", "run-job.js");
 const PROJECT_RUN_JOB_TYPE = "integration_hub.phase2.project_run";
@@ -48,14 +50,22 @@ function createRun(db, projectId, inputsJson) {
   if (projectId && !inputsToStore.project_id) {
     inputsToStore.project_id = projectId;
   }
+  const threadId = typeof inputsToStore.thread_id === "string" && inputsToStore.thread_id.trim()
+    ? inputsToStore.thread_id.trim()
+    : null;
+  const aiSettingId = typeof inputsToStore.ai_setting_id === "string" && inputsToStore.ai_setting_id.trim()
+    ? inputsToStore.ai_setting_id.trim()
+    : null;
   const targetPath = resolveProjectRunTargetPath(inputsToStore, runId);
   withRetry(() =>
     db.prepare(
-      "INSERT INTO runs(tenant_id,id,project_id,status,inputs_json,job_type,target_path,figma_file_key,ingest_artifact_path,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)"
+      "INSERT INTO runs(tenant_id,id,project_id,thread_id,ai_setting_id,status,inputs_json,job_type,target_path,figma_file_key,ingest_artifact_path,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)"
     ).run(
       DEFAULT_TENANT,
       runId,
       projectId,
+      threadId,
+      aiSettingId,
       "queued",
       JSON.stringify(inputsToStore),
       PROJECT_RUN_JOB_TYPE,
@@ -360,7 +370,7 @@ async function handleProjectRunsPost(req, res, db, projectId) {
     return jsonError(res, 400, "VALIDATION_ERROR", "preflight failed", {
       failure_code: localPreflight.failure_code,
       error: localPreflight.message || "PREFLIGHT_FAILED",
-      run_id: runId,
+      run_id: toPublicRunId(runId),
     });
   }
 
@@ -371,7 +381,7 @@ async function handleProjectRunsPost(req, res, db, projectId) {
     return jsonError(res, 400, "VALIDATION_ERROR", "deep verify failed", {
       failure_code: deepResult.failure_code || "preflight_failed",
       error: deepResult.message || "DEEP_VERIFY_FAILED",
-      run_id: runId,
+      run_id: toPublicRunId(runId),
     });
   }
 
@@ -382,7 +392,22 @@ async function handleProjectRunsPost(req, res, db, projectId) {
     });
   }
 
-  const inputsJson = baseValidation.normalized;
+  const sharedContext = loadProjectSharedContext(db, projectId);
+  if (!sharedContext.ok) {
+    return jsonError(
+      res,
+      sharedContext.status || 400,
+      sharedContext.code || "VALIDATION_ERROR",
+      sharedContext.message || "入力が不正です",
+      sharedContext.details || { failure_code: "validation_error" }
+    );
+  }
+
+  const inputsJson = {
+    ...baseValidation.normalized,
+    ...(sharedContext.publicProjectId ? { project_id: sharedContext.publicProjectId } : {}),
+    shared_environment: sharedContext.shared_environment,
+  };
   const runId = createRun(db, projectId, inputsJson);
   const jobPayload = buildProjectJob(projectId, inputsJson);
   try {
@@ -425,7 +450,7 @@ async function handleProjectRunsPost(req, res, db, projectId) {
       });
     },
     onDone: (code) => {
-      const status = code === 0 ? "completed" : "failed";
+      const status = code === 0 ? "succeeded" : "failed";
       updateRunStatus(db, runId, status, {
         fromStatus: "running",
         failureCode: status === "failed" ? "run_failed" : null,
@@ -446,7 +471,7 @@ async function handleProjectRunsPost(req, res, db, projectId) {
       } catch (error) {
         console.warn("audit RUN_STATUS_CHANGED failed:", error.message);
       }
-      recordRunEvent({ runId, eventType: status === "completed" ? "run_completed" : "run_failed" });
+      recordRunEvent({ runId, eventType: status === "succeeded" ? "run_completed" : "run_failed" });
       recordAudit({
         db,
         action: AUDIT_ACTIONS.RUN_UPDATE,
@@ -457,7 +482,7 @@ async function handleProjectRunsPost(req, res, db, projectId) {
     },
   });
 
-  return sendJson(res, 202, { runId, status: "queued" });
+  return sendJson(res, 202, { run_id: toPublicRunId(runId), status: "queued" });
 }
 
 module.exports = {

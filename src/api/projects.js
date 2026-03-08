@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const { recordAudit, AUDIT_ACTIONS } = require("../middleware/audit");
 const { withRetry } = require("../db/retry");
 const { buildErrorBody } = require("../server/errors");
+const PROJECT_SHARED_ENV_SCHEMA_VERSION = "project_shared_env/v1";
 
 function sendJson(res, status, obj) {
   const body = JSON.stringify(obj);
@@ -84,15 +85,74 @@ function validateDriveFolderId(value, { required = false } = {}) {
   return null;
 }
 
+function validateGithubRepository(value, { required = false } = {}) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return required ? "github_repository is required" : null;
+  if (text.length > 300) return "github_repository too long";
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(text)) return "github_repository is invalid";
+  return null;
+}
+
+function validateFigmaFile(value, { required = false } = {}) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return required ? "figma_file is required" : null;
+  if (text.length > 2048) return "figma_file too long";
+  return null;
+}
+
+function validateDriveUrl(value, { required = false } = {}) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return required ? "drive_url is required" : null;
+  if (text.length > 2048) return "drive_url too long";
+  if (!/^https:\/\//i.test(text)) return "drive_url must start with https://";
+  return null;
+}
+
 function nowIso() {
   return new Date().toISOString();
+}
+
+function defaultProjectSharedEnvironment() {
+  return {
+    schema_version: PROJECT_SHARED_ENV_SCHEMA_VERSION,
+    github: { repository: "" },
+    figma: { file: "" },
+    drive: { url: "" },
+  };
+}
+
+function parseProjectSharedEnvironment(raw) {
+  const base = defaultProjectSharedEnvironment();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return base;
+  }
+  const githubRepository = typeof raw.github?.repository === "string" ? raw.github.repository.trim() : "";
+  const figmaFile = typeof raw.figma?.file === "string" ? raw.figma.file.trim() : "";
+  const driveUrl = typeof raw.drive?.url === "string" ? raw.drive.url.trim() : "";
+  return {
+    schema_version: PROJECT_SHARED_ENV_SCHEMA_VERSION,
+    github: { repository: githubRepository },
+    figma: { file: figmaFile },
+    drive: { url: driveUrl },
+  };
+}
+
+function parseProjectSharedEnvironmentJson(text) {
+  if (typeof text !== "string" || !text.trim()) {
+    return defaultProjectSharedEnvironment();
+  }
+  try {
+    return parseProjectSharedEnvironment(JSON.parse(text));
+  } catch {
+    return defaultProjectSharedEnvironment();
+  }
 }
 
 function listProjects(db) {
   return withRetry(() =>
     db
       .prepare(
-        "SELECT id,name,description,staging_url,drive_folder_id,created_at,updated_at FROM projects WHERE tenant_id=? ORDER BY created_at DESC"
+        "SELECT id,name,description,staging_url,drive_folder_id,project_shared_env_json,created_at,updated_at FROM projects WHERE tenant_id=? ORDER BY created_at DESC"
       )
       .all(DEFAULT_TENANT)
   );
@@ -102,7 +162,7 @@ function getProject(db, id) {
   return withRetry(() =>
     db
       .prepare(
-        "SELECT id,name,description,staging_url,drive_folder_id,created_at,updated_at FROM projects WHERE tenant_id=? AND id=?"
+        "SELECT id,name,description,staging_url,drive_folder_id,project_shared_env_json,created_at,updated_at FROM projects WHERE tenant_id=? AND id=?"
       )
       .get(DEFAULT_TENANT, id)
   );
@@ -115,8 +175,18 @@ function createProject(db, name, stagingUrl, actorId, options = {}) {
   const driveFolderId = normalizeDriveFolderId(options.drive_folder_id);
   withRetry(() =>
     db.prepare(
-      "INSERT INTO projects(tenant_id,id,name,description,staging_url,drive_folder_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)"
-    ).run(DEFAULT_TENANT, id, name, description, stagingUrl, driveFolderId || null, ts, ts)
+      "INSERT INTO projects(tenant_id,id,name,description,staging_url,drive_folder_id,project_shared_env_json,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)"
+    ).run(
+      DEFAULT_TENANT,
+      id,
+      name,
+      description,
+      stagingUrl,
+      driveFolderId || null,
+      JSON.stringify(defaultProjectSharedEnvironment()),
+      ts,
+      ts
+    )
   );
   recordAudit({
     db,
@@ -126,6 +196,45 @@ function createProject(db, name, stagingUrl, actorId, options = {}) {
     meta: { project_id: id },
   });
   return getProject(db, id);
+}
+
+function getProjectSharedEnvironment(db, id) {
+  const project = getProject(db, id);
+  if (!project) return null;
+  return parseProjectSharedEnvironmentJson(project.project_shared_env_json);
+}
+
+function putProjectSharedEnvironment(db, id, patch = {}) {
+  const current = getProject(db, id);
+  if (!current) return null;
+  if (patch && typeof patch !== "object") {
+    throw new Error("project_shared_environment patch must be object");
+  }
+  const githubRepository =
+    patch.github_repository !== undefined ? String(patch.github_repository || "").trim() : undefined;
+  const figmaFile = patch.figma_file !== undefined ? String(patch.figma_file || "").trim() : undefined;
+  const driveUrl = patch.drive_url !== undefined ? String(patch.drive_url || "").trim() : undefined;
+
+  const repoErr = validateGithubRepository(githubRepository);
+  if (repoErr) throw new Error(repoErr);
+  const figmaErr = validateFigmaFile(figmaFile);
+  if (figmaErr) throw new Error(figmaErr);
+  const driveErr = validateDriveUrl(driveUrl);
+  if (driveErr) throw new Error(driveErr);
+
+  const prev = parseProjectSharedEnvironmentJson(current.project_shared_env_json);
+  const next = {
+    schema_version: PROJECT_SHARED_ENV_SCHEMA_VERSION,
+    github: { repository: githubRepository !== undefined ? githubRepository : prev.github.repository },
+    figma: { file: figmaFile !== undefined ? figmaFile : prev.figma.file },
+    drive: { url: driveUrl !== undefined ? driveUrl : prev.drive.url },
+  };
+  withRetry(() =>
+    db
+      .prepare("UPDATE projects SET project_shared_env_json=?, updated_at=? WHERE tenant_id=? AND id=?")
+      .run(JSON.stringify(next), nowIso(), DEFAULT_TENANT, id)
+  );
+  return next;
 }
 
 function patchProject(db, id, patch, actorId) {
@@ -181,7 +290,15 @@ module.exports = {
   validateName,
   validateHttpsUrl,
   validateDriveFolderId,
+  validateGithubRepository,
+  validateFigmaFile,
+  validateDriveUrl,
   normalizeDriveFolderId,
+  defaultProjectSharedEnvironment,
+  parseProjectSharedEnvironment,
+  parseProjectSharedEnvironmentJson,
+  getProjectSharedEnvironment,
+  putProjectSharedEnvironment,
   listProjects,
   getProject,
   createProject,

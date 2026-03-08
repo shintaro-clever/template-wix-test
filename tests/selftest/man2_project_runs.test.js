@@ -2,7 +2,8 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { createApiServer } = require("../../src/server/apiApp");
 const { db, DEFAULT_TENANT } = require("../../src/db");
-const { createRun } = require("../../src/api/runs");
+const { createRun, toPublicRunId } = require("../../src/api/runs");
+const { parsePublicIdFor, KINDS } = require("../../src/id/publicIds");
 const { assert, requestLocal } = require("./_helpers");
 
 async function run() {
@@ -35,7 +36,9 @@ async function run() {
     });
     assert(projARes.statusCode === 201, `project A create should return 201, got ${projARes.statusCode}`);
     const projA = JSON.parse(projARes.body.toString("utf8"));
-    createdProjectIds.push(projA.id);
+    const parsedProjA = parsePublicIdFor(KINDS.project, projA.id);
+    assert(parsedProjA.ok, "project A id should be public project ID");
+    createdProjectIds.push(parsedProjA.internalId);
     const pidA = projA.id;
 
     // プロジェクト B 作成
@@ -47,7 +50,9 @@ async function run() {
     });
     assert(projBRes.statusCode === 201, `project B create should return 201, got ${projBRes.statusCode}`);
     const projB = JSON.parse(projBRes.body.toString("utf8"));
-    createdProjectIds.push(projB.id);
+    const parsedProjB = parsePublicIdFor(KINDS.project, projB.id);
+    assert(parsedProjB.ok, "project B id should be public project ID");
+    createdProjectIds.push(parsedProjB.internalId);
     const pidB = projB.id;
 
     // 1. GET /api/projects/:idA/runs → 200, runs 空配列
@@ -64,12 +69,13 @@ async function run() {
 
     // 2. プロジェクト A の run を DB に直接作成
     const runIdA = createRun(db, {
-      project_id: pidA,
+      project_id: parsedProjA.internalId,
       job_type: "test.project_runs_selftest",
       run_mode: "mcp",
       inputs: { test: true },
     });
     createdRunIds.push(runIdA);
+    const runIdAPublic = toPublicRunId(runIdA);
 
     // 3. GET /api/projects/:idA/runs → 1件、run_id が一致
     const oneRes = await requestLocal(handler, {
@@ -80,17 +86,18 @@ async function run() {
     assert(oneRes.statusCode === 200, `GET runs should return 200`);
     const oneBody = JSON.parse(oneRes.body.toString("utf8"));
     assert(oneBody.runs.length === 1, `runs should have 1 item, got ${oneBody.runs.length}`);
-    assert(oneBody.runs[0].run_id === runIdA, "run_id should match");
+    assert(oneBody.runs[0].run_id === runIdAPublic, "run_id should match");
     assert(oneBody.runs[0].job_type === "test.project_runs_selftest", "job_type should match");
 
     // 4. プロジェクト B の run を作成
     const runIdB = createRun(db, {
-      project_id: pidB,
+      project_id: parsedProjB.internalId,
       job_type: "test.project_runs_selftest_b",
       run_mode: "mcp",
       inputs: { test: true },
     });
     createdRunIds.push(runIdB);
+    const runIdBPublic = toPublicRunId(runIdB);
 
     // 5. GET /api/projects/:idA/runs → B の run が混ざらない
     const isolatedRes = await requestLocal(handler, {
@@ -101,7 +108,7 @@ async function run() {
     assert(isolatedRes.statusCode === 200, "GET runs A should return 200");
     const isolatedBody = JSON.parse(isolatedRes.body.toString("utf8"));
     assert(isolatedBody.runs.length === 1, "only A's run should appear");
-    assert(isolatedBody.runs[0].run_id === runIdA, "only runA should appear in project A");
+    assert(isolatedBody.runs[0].run_id === runIdAPublic, "only runA should appear in project A");
 
     // 6. GET /api/projects/:idB/runs → B の run のみ
     const bRes = await requestLocal(handler, {
@@ -112,12 +119,13 @@ async function run() {
     assert(bRes.statusCode === 200, "GET runs B should return 200");
     const bBody = JSON.parse(bRes.body.toString("utf8"));
     assert(bBody.runs.length === 1, "only B's run should appear");
-    assert(bBody.runs[0].run_id === runIdB, "only runB should appear in project B");
+    assert(bBody.runs[0].run_id === runIdBPublic, "only runB should appear in project B");
 
     // 7. 存在しないプロジェクト → 404
+    const notFoundProjectId = `project_${crypto.randomUUID()}`;
     const notFoundRes = await requestLocal(handler, {
       method: "GET",
-      url: `/api/projects/nonexistent-project-xyz-runs/runs`,
+      url: `/api/projects/${notFoundProjectId}/runs`,
       headers: { Authorization: `Bearer ${jwtToken}` },
     });
     assert(notFoundRes.statusCode === 404, `nonexistent project should return 404, got ${notFoundRes.statusCode}`);
@@ -132,14 +140,14 @@ async function run() {
     const globalBody = JSON.parse(globalRes.body.toString("utf8"));
     // /api/runs returns a plain array (not wrapped in { runs: [] })
     assert(Array.isArray(globalBody), "global /api/runs should return an array");
-    const foundA = globalBody.some((r) => r.run_id === runIdA);
-    const foundB = globalBody.some((r) => r.run_id === runIdB);
+    const foundA = globalBody.some((r) => r.run_id === runIdAPublic);
+    const foundB = globalBody.some((r) => r.run_id === runIdBPublic);
     assert(foundA, "runA should appear in global /api/runs");
     assert(foundB, "runB should appear in global /api/runs");
 
     // 9. A に 2 件目の run を追加して件数が正しく増える
     const runIdA2 = createRun(db, {
-      project_id: pidA,
+      project_id: parsedProjA.internalId,
       job_type: "test.project_runs_selftest_a2",
       run_mode: "mcp",
       inputs: {},

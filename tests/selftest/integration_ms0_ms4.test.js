@@ -10,6 +10,7 @@ const { validatePreflightLocal, deepVerify } = require("../../src/runner/preflig
 const { detectInputType } = require("../../src/jobs/autoRoute");
 const { encrypt, decrypt } = require("../../src/crypto/secrets");
 const { mapFigmaVerifyError, verifyFigmaConnection } = require("../../src/routes/connections");
+const { parsePublicIdFor, KINDS } = require("../../src/id/publicIds");
 
 const FAILURE_CODES_13 = [
   "validation_error",
@@ -252,6 +253,10 @@ async function run() {
   assert(createRes.statusCode === 201, "project create should return 201");
   const created = JSON.parse(createRes.body.toString("utf8"));
   assert(created.id, "project id should exist");
+  const createdProjectParsed = parsePublicIdFor(KINDS.project, created.id);
+  assert(createdProjectParsed.ok, "created project id should be public project ID");
+  const createdProjectInternalId = createdProjectParsed.internalId;
+  const createdProjectPublicId = created.id;
 
   const projectsListRes = await requestLocal(handler, {
     method: "GET",
@@ -261,46 +266,47 @@ async function run() {
   assert(projectsListRes.statusCode === 200, "projects list should return 200 after create");
   const projectsList = JSON.parse(projectsListRes.body.toString("utf8"));
   assert(Array.isArray(projectsList.projects), "projects list should include projects array after create");
-  const listedProject = projectsList.projects.find((row) => row && row.project_id === created.id);
+  const listedProject = projectsList.projects.find((row) => row && row.project_id === createdProjectPublicId);
   assert(!!listedProject, "projects list should include created project");
 
   const readRes = await requestLocal(handler, {
     method: "GET",
-    url: `/api/projects/${created.id}`,
+    url: `/api/projects/${createdProjectPublicId}`,
     headers: { Authorization: token },
   });
   assert(readRes.statusCode === 200, "project read should return 200");
   const readProject = JSON.parse(readRes.body.toString("utf8"));
-  assert(readProject.project_id === created.id, "project detail should include project_id");
+  assert(readProject.project_id === createdProjectPublicId, "project detail should include public project_id");
 
   const threadsListRes = await requestLocal(handler, {
     method: "GET",
-    url: `/api/projects/${created.id}/threads`,
+    url: `/api/projects/${createdProjectPublicId}/threads`,
     headers: { Authorization: token },
   });
   assert(threadsListRes.statusCode === 200, "threads list should return 200");
   const threadsList = JSON.parse(threadsListRes.body.toString("utf8"));
   assert(Array.isArray(threadsList.threads), "threads list should include threads array");
 
-  const threadId = `thr-${crypto.randomUUID()}`;
+  const threadInternalId = crypto.randomUUID();
+  const threadPublicId = `thread_${threadInternalId}`;
   const threadNow = new Date().toISOString();
   db.prepare(
     "INSERT INTO project_threads(tenant_id,id,project_id,title,created_at,updated_at) VALUES(?,?,?,?,?,?)"
-  ).run(DEFAULT_TENANT, threadId, created.id, "General", threadNow, threadNow);
+  ).run(DEFAULT_TENANT, threadInternalId, createdProjectInternalId, "General", threadNow, threadNow);
 
   const threadDetailRes = await requestLocal(handler, {
     method: "GET",
-    url: `/api/threads/${threadId}`,
+    url: `/api/threads/${threadPublicId}`,
     headers: { Authorization: token },
   });
   assert(threadDetailRes.statusCode === 200, "thread detail should return 200");
   const threadDetail = JSON.parse(threadDetailRes.body.toString("utf8"));
-  assert(threadDetail.thread && threadDetail.thread.thread_id === threadId, "thread detail should include thread_id");
+  assert(threadDetail.thread && threadDetail.thread.thread_id === threadPublicId, "thread detail should include public thread_id");
   assert(Array.isArray(threadDetail.thread.messages), "thread detail should include messages array");
 
   const postMessageRes = await requestLocal(handler, {
     method: "POST",
-    url: `/api/threads/${threadId}/messages`,
+    url: `/api/threads/${threadPublicId}/messages`,
     headers: { Authorization: token, "Content-Type": "application/json" },
     body: JSON.stringify({ body: "hello thread" }),
   });
@@ -309,7 +315,7 @@ async function run() {
   assert(typeof postMessageBody.message_id === "string" && postMessageBody.message_id.length > 0, "message post should return message_id");
   const threadDetailAfterPostRes = await requestLocal(handler, {
     method: "GET",
-    url: `/api/threads/${threadId}`,
+    url: `/api/threads/${threadPublicId}`,
     headers: { Authorization: token },
   });
   assert(threadDetailAfterPostRes.statusCode === 200, "thread detail after post should return 200");
@@ -322,7 +328,7 @@ async function run() {
 
   const badThreadMessageRes = await requestLocal(handler, {
     method: "POST",
-    url: `/api/threads/${threadId}/messages`,
+    url: `/api/threads/${threadPublicId}/messages`,
     headers: { Authorization: token, "Content-Type": "application/json" },
     body: JSON.stringify({ body: "" }),
   });
@@ -420,7 +426,7 @@ async function run() {
   // cleanup project
   await requestLocal(handler, {
     method: "DELETE",
-    url: `/api/projects/${created.id}`,
+    url: `/api/projects/${createdProjectPublicId}`,
     headers: { Authorization: token },
   });
 }

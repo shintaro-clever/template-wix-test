@@ -118,10 +118,11 @@
   <script src="/ui/sidebar.js"></script>
   <script src="/ui/i18n/i18n.js" defer></script>
   <script type="module">
-    import { apiGet, setText, t } from "/ui/api.js";
+    import { apiGet, isPrefixedId, setText, t } from "/ui/api.js";
 
     const params = new URLSearchParams(window.location.search || "");
-    const projectId = (params.get("project_id") || "").trim();
+    const rawProjectId = (params.get("project_id") || "").trim();
+    const projectId = isPrefixedId("project", rawProjectId) ? rawProjectId : "";
 
     const loadingEl = document.getElementById("runs-loading");
     const errorEl = document.getElementById("runs-error");
@@ -211,7 +212,7 @@
       showLoading();
 
       if (!projectId) {
-        const msg = await t("ui.projectRuns.missingProjectId");
+        const msg = rawProjectId ? "project_id format is invalid" : await t("ui.projectRuns.missingProjectId");
         showError(msg);
         return;
       }

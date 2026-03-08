@@ -122,7 +122,7 @@
   <script src="/ui/sidebar.js"></script>
   <script src="/ui/i18n/i18n.js" defer></script>
   <script type="module">
-    import { apiGet, setText, t } from "/ui/api.js";
+    import { apiGet, isPrefixedId, setText, t } from "/ui/api.js";
 
     const tbody = document.getElementById("projects-table-body");
     const feedback = document.getElementById("projects-feedback");
@@ -144,14 +144,15 @@
       const tr = document.createElement("tr");
       tr.className = index < 1 ? "border-b border-border-dark/60" : "";
 
-      const projectId = String(item.project_id || item.id || "");
+      const projectIdRaw = String(item.project_id || item.id || "");
+      const projectId = isPrefixedId("project", projectIdRaw) ? projectIdRaw : "";
       const name = String(item.name || "-");
       const status = String(item.status || "-");
       const updated = String(item.updated_at || "-");
       const owner = item.owner ? String(item.owner) : "-";
 
       tr.innerHTML = `
-        <td class="py-3 pr-4"><a class="text-primary hover:underline" href="/ui/project.html?project_id=${encodeURIComponent(projectId)}">${name}</a></td>
+        <td class="py-3 pr-4"><a class="text-primary hover:underline" href="${projectId ? `/ui/project.html?project_id=${encodeURIComponent(projectId)}` : "#"}">${name}</a></td>
         <td class="py-3 pr-4">${status}</td>
         <td class="py-3 pr-4">${updated}</td>
         <td class="py-3">${owner}</td>

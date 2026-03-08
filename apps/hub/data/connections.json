@@ -1,15 +1,18 @@
 {
   "ai": {
-    "provider": "",
-    "name": "",
-    "apiKey": ""
+    "provider": "openai",
+    "name": "primary",
+    "apiKey": "sk-test-key"
   },
   "github": {
-    "repo": "",
-    "token": ""
+    "repo": "owner/repo",
+    "token": "ghp_test_token"
   },
   "figma": {
-    "fileUrl": "",
-    "token": ""
+    "fileUrl": "https://www.figma.com/file/abc123/Example",
+    "token": "figd_test_token"
+  },
+  "item_enabled": {
+    "ai": true
   }
 }

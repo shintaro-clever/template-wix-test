@@ -1,6 +1,12 @@
 const STORAGE_KEY = "ui_lang";
 const SUPPORTED = new Set(["ja", "en"]);
 const dictCache = new Map();
+const PREFIXED_ID_PATTERNS = Object.freeze({
+  project: /^project_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  thread: /^thread_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  run: /^run_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  ai_setting: /^ai_setting_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+});
 
 function detectLang() {
   try {
@@ -66,6 +72,53 @@ export async function apiPost(path, payload = {}) {
   } catch (_) {
     throw new Error("Invalid JSON");
   }
+}
+
+export async function apiPut(path, payload = {}) {
+  const url = normalizeApiPath(path);
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  try {
+    return await res.json();
+  } catch (_) {
+    throw new Error("Invalid JSON");
+  }
+}
+
+export async function apiPatch(path, payload = {}) {
+  const url = normalizeApiPath(path);
+  const res = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  try {
+    return await res.json();
+  } catch (_) {
+    throw new Error("Invalid JSON");
+  }
+}
+
+export function isPrefixedId(kind, value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  if (!text) return false;
+  const re = PREFIXED_ID_PATTERNS[kind];
+  return Boolean(re && re.test(text));
 }
 
 export async function t(key) {

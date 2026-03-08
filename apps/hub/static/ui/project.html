@@ -87,6 +87,13 @@
         <button id="project-retry" class="mt-2 px-3 py-2 rounded-lg border border-border-dark text-sm hover:bg-slate-100 dark:hover:bg-background-dark/80 hidden" type="button" data-i18n="common.retry">
           再試行
         </button>
+        <div class="mt-4 flex items-center gap-3">
+          <a id="project-workspace-primary-link" data-project-tab href="/ui/project-workspace.html" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90">
+            <span class="material-symbols-outlined text-base">chat</span>
+            <span data-i18n="ui.project.action.openWorkspace">Workspaceを開く</span>
+          </a>
+          <p class="text-xs text-text-muted" data-i18n="ui.project.workspaceHint">主要導線: AI Workspace から会話を開始します。</p>
+        </div>
 
         <dl class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div class="rounded-lg border border-border-dark p-3">
@@ -106,8 +113,8 @@
 
       <section class="bg-white dark:bg-card-dark p-5 rounded-xl border border-border-dark">
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 text-sm">
-          <a data-project-tab href="/ui/project-thread.html" class="rounded-lg border border-border-dark p-3 hover:border-primary/40 transition-colors">
-            <span data-i18n="ui.project.tab.thread">Thread</span>
+          <a data-project-tab href="/ui/project-workspace.html" class="rounded-lg border border-border-dark p-3 hover:border-primary/40 transition-colors">
+            <span data-i18n="ui.project.tab.workspace">Workspace</span>
           </a>
           <a data-project-tab href="/ui/project-connections.html" class="rounded-lg border border-border-dark p-3 hover:border-primary/40 transition-colors">
             <span data-i18n="ui.project.tab.connections">Connections</span>
@@ -128,6 +135,13 @@
           <a data-project-tab href="/ui/project-runs.html" class="rounded-lg border border-border-dark p-3 hover:border-primary/40 transition-colors">
             <span data-i18n="ui.project.tab.runs">Runs</span>
           </a>
+          <a data-project-tab href="/ui/project-settings.html" class="rounded-lg border border-border-dark p-3 hover:border-primary/40 transition-colors">
+            <span data-i18n="ui.project.tab.settings">Settings</span>
+          </a>
+        </div>
+        <div class="mt-3 pt-3 border-t border-border-dark/60 text-xs text-text-muted flex items-center justify-between gap-2">
+          <p data-i18n="ui.project.threadDebugHint">掲示板型Thread画面は内部確認用です。通常はWorkspaceを利用してください。</p>
+          <a data-project-tab href="/ui/project-thread.html" class="text-primary hover:underline whitespace-nowrap" data-i18n="ui.project.openThreadDebug">Thread Debug</a>
         </div>
       </section>
     </div>
@@ -136,10 +150,11 @@
   <script src="/ui/sidebar.js"></script>
   <script src="/ui/i18n/i18n.js" defer></script>
   <script type="module">
-    import { apiGet, setText, t } from "/ui/api.js";
+    import { apiGet, isPrefixedId, setText, t } from "/ui/api.js";
 
     const params = new URLSearchParams(window.location.search || "");
-    const projectId = (params.get("project_id") || "").trim();
+    const rawProjectId = (params.get("project_id") || "").trim();
+    const projectId = isPrefixedId("project", rawProjectId) ? rawProjectId : "";
     const feedback = document.getElementById("project-feedback");
     const retry = document.getElementById("project-retry");
     const nameEl = document.getElementById("project-name");
@@ -168,7 +183,7 @@
 
       if (!projectId) {
         const err = await t("common.error");
-        const msg = await t("ui.project.missingId");
+        const msg = rawProjectId ? "project_id format is invalid" : await t("ui.project.missingId");
         feedback.textContent = `${err}: ${msg}`;
         retry.classList.remove("hidden");
         return;

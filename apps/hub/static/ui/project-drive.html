@@ -114,7 +114,9 @@
   <script>
     (function () {
       const params = new URLSearchParams(location.search);
-      const projectId = params.get('project_id');
+      const rawProjectId = (params.get('project_id') || '').trim();
+      const PROJECT_ID_RE = /^project_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const projectId = PROJECT_ID_RE.test(rawProjectId) ? rawProjectId : '';
 
       const backLink = document.getElementById('back-link');
       if (projectId && backLink) {
@@ -167,7 +169,7 @@
 
       function loadData() {
         if (!projectId) {
-          showError('project_id が指定されていません');
+          showError(rawProjectId ? 'project_id format is invalid' : 'project_id が指定されていません');
           return;
         }
         showLoading();

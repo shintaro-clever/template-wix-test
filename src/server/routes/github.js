@@ -1,6 +1,7 @@
 const { readJsonBody, sendJson, jsonError } = require("../../api/projects");
 const { createPullRequestMinimal } = require("../../github/pr");
 const { updateRunTrace } = require("../../db/runTrace");
+const { parseRunIdInput } = require("../../api/runs");
 
 async function handleGithubPrCreate(req, res) {
   if ((req.method || "GET").toUpperCase() !== "POST") {
@@ -18,11 +19,19 @@ async function handleGithubPrCreate(req, res) {
   }
 
   try {
+    let internalRunId = "";
+    const runIdInput = typeof body.run_id === "string" && body.run_id.trim() ? body.run_id.trim() : "";
+    if (runIdInput) {
+      const parsed = parseRunIdInput(runIdInput);
+      if (!parsed.ok) {
+        return jsonError(res, parsed.status || 400, parsed.code || "VALIDATION_ERROR", parsed.message || "run_id format is invalid", parsed.details || { failure_code: "validation_error" });
+      }
+      internalRunId = parsed.internalId;
+    }
     const result = await createPullRequestMinimal(body || {});
-    const runId = typeof body.run_id === "string" && body.run_id.trim() ? body.run_id.trim() : "";
-    if (runId && result && !result.dry_run) {
+    if (internalRunId && result && !result.dry_run) {
       updateRunTrace({
-        runId,
+        runId: internalRunId,
         githubPrUrl: result.pr_url || null,
         githubPrNumber: result.pr_number || null,
       });
