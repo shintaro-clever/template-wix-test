@@ -1,17 +1,91 @@
 # Wix Startup Manual
 
 ## このマニュアルについて
-- この文書は、非エンジニアが Wix Studio 案件を立ち上げるときに最初に読むためのものです
+- この文書は、Wix Studio 案件を立ち上げるときに最初に読むためのものです
 - 目的は、案件開始時にやることの順番を迷わないようにすることです
 - 技術的に深い操作は扱わず、必要な場合は管理者へ確認します
+
+## 前提：リポジトリの役割と同期方針
+
+**本リポジトリをテンプレート基盤とし、Wix Studio で生成したリポジトリを実働先として運用する。現時点では、本リポジトリの対象資産を実働先へ片方向でミラーする。**
+
+```
+テンプレート基盤（本リポジトリ）
+  └─ 片方向ミラー ──→  実働先（Wix Studio GitHub Integration が生成したリポジトリ）
+                         例: my-site-1
+```
+
+### 同期方針の定義
+
+| 項目 | 内容 |
+|---|---|
+| **同期方向** | テンプレート基盤 → 実働先（片方向のみ） |
+| **同期対象** | `.github/`・`docs/`・`agents/`・`scripts/`・`prototype/`・`AGENTS.md`・`CLAUDE.md`・`README.md` |
+| **非同期対象** | `src/`・`wix.config.json`・`.wix/`（Wix が生成・管理するもの） |
+| **禁止事項** | テンプレート側の都合で `src/` や `wix.config.json` を上書きしない |
+| **役割分担** | テンプレートの更新と実働先での動作確認は別工程。混在させない |
+
+> **非推奨（過去の試行）**：実働先（Wix 生成リポジトリ）の `src/` をテンプレート側にコピーして連携しようとする方法は、
+> Wix 側が認識するリポジトリと一致しないため機能しません。
+> この手順は採用しないでください。
+
+### なぜこの方針か
+
+この役割分担は手順上の便宜ではなく、Wix の仕組みから導かれる必然です。
+
+**理由 1：Wix CLI / Studio が期待する構造の正本が実働先にある**
+
+Wix CLI（`@wix/cli`）は `src/pages/masterPage.js` を含む Velo コード構造を前提として動作します。この構造は Wix Studio GitHub Integration が生成するものであり、手動作成やテンプレート側からのコピーでは正しく機能しません。実際にこの誤りを犯したとき、`ENOENT: no such file or directory, scandir '...src'` エラーが発生し、`wix dev` も `wix preview` も起動できませんでした。`wix.config.json` に含まれる `siteId` も Wix が発行するものであり、テンプレート側の値で上書きしてはなりません。
+
+**理由 2：実働先に合わせようとするより破綻しにくい**
+
+過去の試行では、テンプレート側リポジトリ（`ryoochi-wix-site`）に `src/` をコピーして連携しようとしました。しかし `wix preview --source remote` が参照するのは「Wix が認識しているリポジトリ（`my-site-1`）」であり、テンプレート側での変更は Wix 側に届きませんでした。CI が成功しているのにデザインが一切反映されないという、原因が見えない破綻が起きました。
+
+**理由 3：障害切り分けがしやすい**
+
+| 症状 | 原因の所在 |
+|---|---|
+| `src/` の構造エラー・ページ未検出 | 実働先の Wix 生成物が変更された |
+| CI 失敗・プレビュー URL 未生成 | テンプレート側（Secrets・ワークフロー・package.json） |
+| デザイン変更が反映されない | 実働先ではなくテンプレート側を編集している |
+
+## 同期対象と非同期対象
+
+Phase 1 Step 2 のミラー作業では、「テンプレート基盤から実働先へ同期してよいもの」と「Wix が生成・管理するため同期しないもの」を明確に区別する。
+
+### 同期対象（テンプレート基盤 → 実働先へ片方向で同期）
+
+| 資産 | 説明 |
+|---|---|
+| `.github/workflows/` | CI ワークフロー（wix preview など） |
+| `agents/` | AI エージェント行動規範 |
+| `docs/` | マニュアル・連携ドキュメント |
+| `scripts/` | PR 自動化スクリプト |
+| `prototype/` | 静的 HTML 原型 |
+| `AGENTS.md`, `CLAUDE.md` | AI ルール入口 |
+| `README.md` | プロジェクト説明 |
+| `.devcontainer/` | Codespaces 設定 |
+| `package.json`（`@wix/cli` 追記） | devDependency を追加するだけで上書きしない |
+
+### 非同期対象（Wix が生成・管理するもの。テンプレート側から上書きしない）
+
+| 資産 | 理由 |
+|---|---|
+| `src/` | Wix Studio が生成・管理する Velo コード構造。テンプレート側の内容で**上書きしない** |
+| `wix.config.json` | 実働先の `siteId` を含む。テンプレート側の値で上書きしてはならない |
+| `.wix/` | Wix CLI が生成するローカルキャッシュ。コミット対象外 |
+
+> **重要**：`src/` はテンプレート側のコードで置き換えない。実働先の Wix Studio GitHub Integration が生成した構造をそのまま維持する。`src/` への変更は Wix Studio 上での編集または Velo 開発フローに従って行う。
+
+---
 
 ## 案件立ち上げの全体フロー
 
 ```
 Phase 1: 技術セットアップ（管理者が担当）
-  └─ GitHub リポジトリ準備
-  └─ Wix GitHub 連携（src/ 初期化・wix.config.json 設定）
-  └─ CI 動作確認（main push → 自動公開）
+  └─ Wix Studio GitHub Integration でリポジトリ生成
+  └─ 生成リポジトリに CI / docs / agents をインストール
+  └─ CI 動作確認（main push → wix preview 生成）
 
 Phase 2: Wix Studio 最小検証（非エンジニアも参加）
   └─ Wix Studio にログイン
@@ -20,7 +94,8 @@ Phase 2: Wix Studio 最小検証（非エンジニアも参加）
 
 Phase 3: 本制作・日常運用
   └─ Wix Studio 上でビジュアル編集
-  └─ main push で自動公開（CI が処理）
+  └─ main push → wix preview で確認
+  └─ 本番公開は手動（ドメイン・課金整備後）
 ```
 
 ## 1. 何を準備するか
@@ -39,15 +114,25 @@ Phase 3: 本制作・日常運用
 ## 2. Phase 1：技術セットアップ（管理者担当）
 
 非エンジニアは直接操作しなくてよいが、内容を把握しておく。
+詳細手順は `docs/wix/connection-plan.md` を参照。
 
-### 管理者が行うこと
-- GitHub リポジトリに `wix.config.json` を設置（サイトIDと接続情報）
-- Wix Studio の GitHub Integration で一時リポジトリを作成し、`src/` を本リポジトリにコピー
-- GitHub Actions の CI が `main` push で `wix publish` を実行することを確認
+### 管理者が行うこと（3ステップ）
+
+**Step 1：Wix Studio GitHub Integration で実働先リポジトリを生成する**
+- Wix Studio エディター → GitHub Integration → 新規リポジトリを作成（例: `my-site-1`）
+- Wix が `src/`（Velo コード構造）と `wix.config.json` を自動生成してプッシュする
+- この生成リポジトリが **実働先** になる（テンプレート基盤と別リポジトリ）
+
+**Step 2：テンプレート基盤の運用資産を実働先へ移植する**
+- `scripts/migrate-to-wix-repo.sh` を使ってテンプレート基盤から CI・docs・agents をコピー
+- `WIX_API_KEY` を実働先の GitHub Secrets に設定
+
+**Step 3：CI 動作確認**
+- `main` へプッシュ → GitHub Actions がプレビューURLを生成することを確認
 
 ### 完了の目安
-- `main` にコードをプッシュすると Wix Studio のサイトに自動反映される
-- Wix Studio で編集した内容が本番公開できる状態になっている
+- `main` にコードをプッシュするとプレビューURLが生成される
+- Wix Studio 上でコードの変更が反映されることを確認できている
 
 ## 3. Phase 2：Wix Studio 最小検証
 
@@ -80,13 +165,13 @@ Phase 3: 本制作・日常運用
 
 ### 日常の更新フロー
 1. Wix Studio 上でビジュアル編集
-2. 確認したら「公開」ボタン（または管理者が `main` push で自動公開）
-3. 本番反映を確認
+2. 確認したら Wix Studio の「公開」ボタン
+3. コード変更がある場合は `main` push → プレビューURLで確認
 
-### 公開の仕組み（参考）
-- `main` ブランチへのプッシュで GitHub Actions が自動的に `wix preview` を実行する
-- プレビューURLが生成されるが、本番公開はしない
-- 本番公開（`wix publish`）はドメイン設定・課金が整った後に管理者が手動で行う
+### CI の目的とプレビューの仕組み（参考）
+- `main` ブランチへのプッシュで GitHub Actions（`wix-preview-on-push`）が `wix preview` を実行する
+- Actions ログにプレビュー URL（`https://wix.to/...`）が生成されるが、**本番公開は行わない**
+- 本番公開（`wix publish`）はドメイン設定・課金が整った後に管理者が手動で実施する将来の作業
 - 非エンジニアは基本的に Wix Studio の画面操作だけで作業が完結する
 
 ## 6. 困ったときどうするか
@@ -96,7 +181,7 @@ Phase 3: 本制作・日常運用
 - 画像や文言が足りず、検証対象が決められない
 - 本番全体を先に作りたくなってしまう
 - 画面上の調整で済むのか、管理者確認が必要なのか判断できない
-- `main` に push したのにサイトが更新されない
+- `main` に push したのにプレビューが更新されない
 
 ### 迷ったときの考え方
 - まずは最小単位で検証する
@@ -109,9 +194,22 @@ Phase 3: 本制作・日常運用
 - 静的原型を作り直す必要がありそうなとき
 - Wix Studio 上の調整だけでは吸収できない構造変更が出たとき
 - 本制作へ進むか、方針を修正するかの判断が必要なとき
-- CI が失敗して自動公開されないとき
+- CI が失敗してプレビューが生成されないとき
+
+## 過去の誤認ポイント（FAQ）
+
+同じ失敗を繰り返さないための記録。技術詳細は `docs/wix/connection-plan.md` を参照。
+
+| 誤解・罠 | 実際の挙動 |
+|---|---|
+| `wix.config.json` は生成されたままでよい | `uiVersion: "6"` が含まれないことがある。手動追記が必要 |
+| `wix publish --source remote` で本番公開できる | `--source` は `wix preview` 専用。`wix publish` に `--source` オプションは存在しない |
+| `src/` を手動作成すれば CLI が動く | CLI が期待する構造と一致しないと `ENOENT` エラーで起動しない。Wix 生成のものを使う |
+| 既存リポジトリに `src/` をコピーすれば接続できる | Wix は自身が生成したリポジトリしか認識しない。CI 成功でもデザインが反映されない |
+| CI で `wix publish` が成功（exit 0）なら公開されている | 非TTY環境では選択メニューが出て入力待ちのまま exit 0 で終了する。実際には公開されていない |
 
 ## 補足
 - Phase 1 の技術手順の詳細は `docs/wix/connection-plan.md` を参照
+- 旧方針との差分・引継ぎ情報は `docs/wix/connection-plan.md`「方針変更の記録」セクションを参照
 - Git や CLI の詳細はこのマニュアルの主目的ではありません
 - 技術手順が必要な場合は `docs/wix/` 配下の文書を参照するか、管理者へ確認してください

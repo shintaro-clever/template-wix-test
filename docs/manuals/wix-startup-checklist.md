@@ -2,22 +2,40 @@
 
 ## Phase 1：技術セットアップ（管理者担当）
 
-### リポジトリ準備
-- 確認する: GitHub リポジトリが存在する
-- 確認する: `wix.config.json` が `siteId` と `uiVersion: "6"` を含む状態でコミット済み
-- 確認する: GitHub Secrets に `WIX_API_KEY` が設定されている
-- 確認する: `.github/workflows/wix-main-publish.yml` が存在する
+### Step 1：Wix 生成リポジトリの用意
+- 確認する: Wix Studio GitHub Integration で実働先リポジトリを生成した（実働先は my-site-1 等の Wix 生成リポジトリ）
+- 確認する: GitHub 上にリポジトリが存在し、Wix がプッシュしたファイルが含まれている
+- 触らない: テンプレート基盤（ryoochi-wix-site）を実働先として使わない（Wix は自身が生成したリポジトリしか認識しない）
 
-### Velo 構造初期化
-- 確認する: `src/pages/masterPage.js` が存在する
+### Step 2：wix.config.json の確認
+- 確認する: `wix.config.json` がリポジトリ直下に存在する
+- 確認する: `siteId` が Wix 生成の値で設定されている
+- 確認する: `uiVersion: "6"` が含まれている（ない場合は手動追記してコミットする）
+- 触らない: `siteId` をテンプレート基盤側の値で上書きしない
+
+### Step 3：src/ の存在確認
+- 確認する: `src/pages/masterPage.js` が存在する（Wix Studio GitHub Integration が自動生成）
 - 確認する: `src/backend/permissions.json` が存在する
-- 実施する: Wix Studio GitHub Integration で一時リポジトリを作成し `src/` をコピー済み（初回のみ）
-- 確認する: `src/` 全体がコミット・main マージ済み
+- 確認する: `src/styles/global.css` が存在する
+- 触らない: `src/` をテンプレート基盤のファイルで上書きしない（Wix 生成構造を維持する）
 
-### CI 動作確認
-- 確認する: `main` push 後に GitHub Actions `wix-main-publish` が SUCCESS になる
-- 確認する: Wix Studio サイトに変更が反映されることを確認した
-- 触らない: CI が失敗している状態のまま Phase 2 に進まない
+### Step 4：WIX_API_KEY の設定
+- 確認する: Wix ダッシュボードで API キーを発行済み
+- 確認する: 生成リポジトリの Settings → Secrets → Actions に `WIX_API_KEY` が設定されている
+
+### Step 5：CI 動作確認（wix preview --source remote）
+- 確認する: `.github/workflows/wix-preview-on-push.yml` が存在する
+- 確認する: `main` push 後に GitHub Actions `wix-preview-on-push` が SUCCESS になる
+- 確認する: Actions ログにプレビュー URL（`https://wix.to/...`）が出力されている
+- 触らない: CI が失敗している状態のまま次のステップに進まない
+- 覚える: このワークフローはプレビュー URL を生成するのみで、本番公開は行わない
+
+### Step 6：テンプレート基盤からの資産移植確認
+- 確認する: `.github/workflows/` に CI ワークフローが移植されている
+- 確認する: `agents/`、`docs/`、`scripts/`、`prototype/` が移植されている
+- 確認する: `AGENTS.md`、`CLAUDE.md`、`README.md` が存在する
+- 確認する: `package.json` に `@wix/cli` devDependency が追記されている
+- 触らない: 移植時に `src/` や `wix.config.json` を既存側の内容で上書きしない
 
 ## Phase 2：最小検証（非エンジニアも参加）
 
@@ -50,7 +68,7 @@
 
 - 確認する: 最小検証で分かったことが整理されている
 - 確認する: 通常更新を Wix Studio 側で回せる見込みがある
-- 確認する: `main` push → 自動公開のフローを関係者が把握している
+- 確認する: `main` push → プレビュー URL 自動生成のフローを関係者が把握している
 - 確認する: 誰が次の作業を担当するか明確になっている
 - 依頼する: 本制作へ進む判断が必要なら管理者へ確認する
 - 依頼する: 方針修正が必要なら判断材料をまとめて共有する

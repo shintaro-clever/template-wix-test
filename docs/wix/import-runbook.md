@@ -10,16 +10,67 @@
 GitHub ↔ Wix 連携が未設定の場合、先に以下を完了する。
 詳細は `docs/wix/connection-plan.md` を参照。
 
-### チェックリスト
+### テンプレート基盤 → 実働先への移植実行方法
+
+Codespace のトークンはテンプレート基盤リポジトリにのみスコープされているため、
+実働先への直接プッシュはローカル環境で行う。
+
+**方法 A：`scripts/migrate-to-wix-repo.sh` を使う（推奨）**
+```bash
+git clone <テンプレート基盤のURL> /tmp/template
+git clone <実働先のURL> /tmp/working-repo
+bash /tmp/template/scripts/migrate-to-wix-repo.sh /tmp/working-repo
+cd /tmp/working-repo && git status
+```
+
+**方法 B：zip バンドルを使う**
+1. Codespace のファイルブラウザから `/tmp/migration-bundle.zip` をダウンロード
+2. 実働先リポジトリのローカルクローンに展開する
+3. `git status` で差分を確認してコミット
+
+**どちらの方法でも確認すること：**
+- 実働先の `src/` に差分が出ていないこと
+- 実働先の `wix.config.json` に差分が出ていないこと
+- 実働先の `package.json` には `@wix/cli` が追記されているだけで他は変わっていないこと
+
+### リポジトリの役割
+
+| リポジトリ | 役割 |
+|---|---|
+| `ryoochi-wix-site`（本リポジトリ） | **テンプレート基盤**。CI・ドキュメント・AI ルール等を管理する |
+| 実働先（例: `my-site-1`） | **実働先**。Wix Studio GitHub Integration が生成した Wix 連携リポジトリ |
+
+同期方向は **テンプレート基盤 → 実働先（片方向のみ）**。逆方向の同期は行わない。
+
+### 移植対象（テンプレート基盤 → 実働先へ持ち込む）
+
+| 資産 | 備考 |
+|---|---|
+| `.github/` | CI ワークフロー一式 |
+| `docs/` | マニュアル・連携ドキュメント |
+| `agents/` | AI エージェント行動規範 |
+| `scripts/` | PR 自動化・構造チェック等のスクリプト |
+| `prototype/` | 静的 HTML 原型 |
+| `README.md` | プロジェクト説明 |
+| `AGENTS.md` | AI ルール入口 |
+| `CLAUDE.md` | Claude Code 向けルール入口 |
+| `package.json` | `@wix/cli` devDependency を**追記のみ**（ファイルごと置き換えは不可） |
+
+### 移植対象外（Wix が生成・管理するもの。上書きしない）
+
+| 資産 | 理由 |
+|---|---|
+| `src/` | Wix Studio が生成・管理する Velo コード構造。テンプレート側の内容で**絶対に上書きしない** |
+| `wix.config.json` | 実働先の `siteId` を含む。テンプレート側の値で上書きしてはならない |
+| `.wix/` | Wix CLI が生成するローカルキャッシュ。コミット対象外 |
+
+> `src/` をテンプレート側のコードで置き換えると Wix CLI が起動しなくなる（`ENOENT` エラー）。変更は Wix Studio 上または Velo 開発フローで行う。
+
+### 技術セットアップ チェックリスト
 - `wix.config.json` がリポジトリ直下にあり `siteId` と `uiVersion: "6"` が設定されている
 - GitHub Secrets に `WIX_API_KEY` が設定されている
 - `src/` ディレクトリが存在し `src/pages/masterPage.js` が含まれている
-- `main` push → `wix publish --approve-preview` の CI が通ることを確認済み
-
-### src/ がない場合の初期化手順（要点のみ）
-1. Wix Studio GitHub Integration で一時リポジトリ（例: `my-site-init`）を作成
-2. 生成された `src/` を本リポジトリにコピー: `cp -r /tmp/wix-init-tmp/src ./`
-3. コミット・PR・main マージ → CI で動作確認
+- `main` push → `wix preview --source remote` の CI が通ることを確認済み
 
 ## 1. Studio ブラウザでログイン状態確認
 
@@ -29,7 +80,7 @@ GitHub ↔ Wix 連携が未設定の場合、先に以下を完了する。
 - 現時点の阻害要因は `Wix Studio ブラウザ側の未ログインセッション` であると認識する
 
 ### 認証通過の定義
-- Wix Studio 認証が通ったと見なす条件は、対象 `site ID 0e9fab77-6694-464e-9f13-d5c320c88550` の案件画面が実際に表示されること
+- Wix Studio 認証が通ったと見なす条件は、対象 `site ID <siteId>` の案件画面が実際に表示されること
 - `Sign up / Log in` 画面でないだけでは認証通過としない
 - ログイン画面以外であっても、対象案件画面に未到達なら未通過として扱う
 
@@ -40,8 +91,8 @@ GitHub ↔ Wix 連携が未設定の場合、先に以下を完了する。
 ## 2. 対象 URL 到達確認
 
 ### 固定対象
-- 対象 URL は `https://manage.wix.com/dashboard/0e9fab77-6694-464e-9f13-d5c320c88550/setup?referralInfo=my-sites`
-- 対象 `site ID` は `0e9fab77-6694-464e-9f13-d5c320c88550`
+- 対象 URL は `https://manage.wix.com/dashboard/<siteId>/setup?referralInfo=my-sites`
+- 対象 `site ID` は `<siteId>`
 
 ### Studio 側でやること
 - 上記 URL を開き、対象案件へ到達できるか確認する

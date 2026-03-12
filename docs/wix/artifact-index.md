@@ -18,10 +18,7 @@
 - `docs/wix/import-runbook.md`
 
 ## 実施記録
-- `docs/wix/minimum-validation-run-2026-03-12.md`
-  - `site ID 0e9fab77-6694-464e-9f13-d5c320c88550` を固定済み
-  - `prototype/minimum-page/` は開始条件を満たす
-  - 現在の阻害要因は `Wix Studio ブラウザ側の未ログインセッション`
+- `docs/wix/archive/` — 案件ごとの実施記録を格納する（テンプレート対象外）
 
 ## 持ち込み元の原型
 - `prototype/minimum-page/index.html`
@@ -32,6 +29,5 @@
 - 役割境界が `docs/wix/role-boundary.md` に整理されている
 - 最小検証仕様と判定基準が `docs/wix/minimum-validation-spec.md` と `docs/wix/go-no-go.md` にある
 - 持ち込み手順と編集性観点が `docs/wix/import-runbook.md` と `docs/wix/editability-checklist.md` にある
-- 実施結果と詰まり方の記録が `docs/wix/minimum-validation-run-2026-03-12.md` にある
-- `site ID 不明` ではなく `Wix Studio ブラウザ側の未ログインセッション` が阻害要因として固定されている
+- 案件ごとの実施記録が `docs/wix/archive/` にある
 - 再利用できる静的原型が `prototype/minimum-page/` にある

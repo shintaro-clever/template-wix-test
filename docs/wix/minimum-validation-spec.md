@@ -27,8 +27,8 @@
 5. Hero 単位で選択と再調整ができるか確認し、編集性確認へ進む
 
 ## 対象案件の固定情報
-- 対象 URL は `https://manage.wix.com/dashboard/0e9fab77-6694-464e-9f13-d5c320c88550/setup?referralInfo=my-sites`
-- 対象 `site ID` は `0e9fab77-6694-464e-9f13-d5c320c88550`
+- 対象 URL は `https://manage.wix.com/dashboard/<siteId>/setup?referralInfo=my-sites`
+- 対象 `site ID` は `<siteId>`
 - 次回の再実施も上記 `site ID` を前提条件とする
 
 ## 非対象
