@@ -48,4 +48,4 @@ jobs:
           WIX_API_KEY: ${{ secrets.WIX_API_KEY }}
 
       - name: Create Wix preview from main
-        run: npx wix preview --source remote
+        run: npx wix preview --source local
