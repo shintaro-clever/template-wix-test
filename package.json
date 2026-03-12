@@ -1,24 +1,13 @@
 {
-  "name": "integration-hub-phase1",
+  "name": "figma-ai-github-workflow",
   "version": "1.0.0",
   "type": "commonjs",
   "scripts": {
-    "start": "node server.js",
-    "build:ui": "node scripts/build-static-ui.js",
-    "test": "npm run build:ui && node scripts/selftest.js",
-    "test:p3": "npm run build:ui && node scripts/selftest-phase3.js",
-    "cleanup:runs": "node scripts/cleanup-runs.js",
     "check:structure": "node scripts/check-structure.js",
     "check:sot-dup": "node scripts/check-sot-dup.js"
   },
-  "dependencies": {
-    "better-sqlite3": "^12.6.2",
-    "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2"
-  },
-  "devDependencies": {
-    "nock": "^14.0.10"
-  },
+  "dependencies": {},
+  "devDependencies": {},
   "volta": {
     "node": "22.22.0"
   }

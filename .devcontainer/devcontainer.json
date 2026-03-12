@@ -1,8 +1,6 @@
 {
   "name": "figma-ai-github-workflow",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
-  "postCreateCommand": "npm install && npm install -g @openai/codex",
-  "postStartCommand": "bash scripts/fix-dns.sh",
   "remoteEnv": {
     "GITHUB_PAT_TOKEN": "${localEnv:GITHUB_PAT_TOKEN}"
   }
