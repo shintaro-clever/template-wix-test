@@ -118,15 +118,14 @@ Phase 3: 本制作・日常運用
 
 ### 管理者が行うこと（3ステップ）
 
-**Step 1：Wix Studio GitHub Integration でリポジトリを生成する**
-- Wix Studio エディター → GitHub Integration → 新規リポジトリを作成
+**Step 1：Wix Studio GitHub Integration で実働先リポジトリを生成する**
+- Wix Studio エディター → GitHub Integration → 新規リポジトリを作成（例: `my-site-1`）
 - Wix が `src/`（Velo コード構造）と `wix.config.json` を自動生成してプッシュする
-- このリポジトリが以降の作業の母体になる
+- この生成リポジトリが **実働先** になる（テンプレート基盤と別リポジトリ）
 
-**Step 2：生成リポジトリに運用資産を移植する**
-- CI ワークフロー（`wix preview --source remote`）を追加
-- ドキュメント・AI 管理ルール・スクリプトをコピー
-- `WIX_API_KEY` を GitHub Secrets に設定
+**Step 2：テンプレート基盤の運用資産を実働先へ移植する**
+- `scripts/migrate-to-wix-repo.sh` を使ってテンプレート基盤から CI・docs・agents をコピー
+- `WIX_API_KEY` を実働先の GitHub Secrets に設定
 
 **Step 3：CI 動作確認**
 - `main` へプッシュ → GitHub Actions がプレビューURLを生成することを確認
