@@ -1,4 +1,4 @@
-name: wix-main-publish
+name: wix-preview-on-push
 
 on:
   push:
@@ -9,11 +9,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: wix-main-publish-${{ github.ref }}
-  cancel-in-progress: false
+  group: wix-preview-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  publish:
+  preview:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
       - name: Verify Wix site connection
         run: |
           if [ ! -f wix.config.json ]; then
-            echo "::error::wix.config.json is missing. Connect this repository to Wix Studio Git Integration first."
+            echo "::error::wix.config.json is missing. Run docs/wix/connection-plan.md setup first."
             exit 1
           fi
 
@@ -47,5 +47,5 @@ jobs:
         env:
           WIX_API_KEY: ${{ secrets.WIX_API_KEY }}
 
-      - name: Publish Wix site from main
-        run: printf '\n' | npx wix publish --approve-preview
+      - name: Create Wix preview from main
+        run: npx wix preview --source remote

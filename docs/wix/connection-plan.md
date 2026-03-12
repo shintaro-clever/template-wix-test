@@ -87,20 +87,24 @@ npx wix dev
 
 成功するとブラウザで Wix Studio ローカルエディターが開く。
 
-### CI（GitHub Actions）で wix publish を確認する
+### CI（GitHub Actions）で wix preview を確認する
 
-`main` ブランチへプッシュすると `wix-main-publish.yml` が動作する:
+`main` ブランチへプッシュすると `wix-preview-on-push.yml` が動作する:
 
 ```
 main push
   → wix login --api-key
-  → wix publish --approve-preview
-  → Wix Studio の下書きが本番に公開される
+  → wix preview --source remote
+  → プレビューURLが生成される（本番公開はしない）
 ```
+
+プレビューURLは Actions のログに表示される。
+本番公開（`wix publish`）は手動で行う。
 
 ## 注意事項
 
-- `wix publish` は `src/` のコードを Wix Studio に同期して公開する
+- `wix preview --source remote` はコードをWix Studioに反映してプレビューURLを生成する
+- 本番公開はしない（ドメイン設定・課金が整ってから手動で `wix publish` を実行する）
 - Wix Studio 側でビジュアル編集した内容が上書きされる場合がある
 - `src/` 配下の JS ファイルは Velo（Wix の JavaScript プラットフォーム）のコード
 - `wix.config.json` はコミット対象（`.gitignore` には含めない）
