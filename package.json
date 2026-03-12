@@ -4,6 +4,8 @@
   "type": "commonjs",
   "scripts": {
     "test": "npm run check:structure && npm run check:sot-dup",
+    "wix:help": "npx wix --help",
+    "wix:version": "npx wix --version",
     "check:structure": "node scripts/check-structure.js",
     "check:sot-dup": "node scripts/check-sot-dup.js"
   },

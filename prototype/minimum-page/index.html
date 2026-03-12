@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Minimum Validation Page</title>
+    <meta
+      name="description"
+      content="Wix Studio 連携の最小検証用ページ。編集性と再構成しやすさの確認を目的とした静的原型。">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header">
+        <div class="container">
+          <p class="site-tag">Wix Studio Minimum Validation</p>
+        </div>
+      </header>
+
+      <main>
+        <section class="section hero" id="section-hero" aria-labelledby="hero-title">
+          <div class="container hero-grid">
+            <div class="hero-copy content-block">
+              <p class="section-label">Section 01 / Hero</p>
+              <p class="eyebrow">Hero Section</p>
+              <h1 id="hero-title">最小単位で編集性を確認するための検証ページ</h1>
+              <p class="lead text-slot">
+                外部 AI 制作物を Wix Studio に持ち込んだ後も、見出し、本文、画像、CTA
+                を無理なく差し替えられるかを確認するための原型です。
+              </p>
+              <div class="cta-group" aria-label="Hero CTA group">
+                <a class="button button-primary cta-slot" href="#section-cta">検証ポイントを見る</a>
+                <a class="button button-secondary cta-slot" href="#section-overview">構造を確認する</a>
+              </div>
+            </div>
+
+            <div class="hero-visual media-block" aria-labelledby="hero-image-label">
+              <div class="image-placeholder">
+                <span id="hero-image-label">Image Placeholder</span>
+                <p>Wix Studio 上で画像差し替えやサイズ調整を確認する領域</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-overview" aria-labelledby="overview-title">
+          <div class="container narrow">
+            <p class="section-label">Section 02 / Overview</p>
+            <p class="eyebrow">Overview</p>
+            <h2 id="overview-title">このページで確認すること</h2>
+            <p class="text-slot">
+              この原型は、装飾の作り込みではなく、セクション構造と再編集のしやすさを確認するためのものです。
+              Wix Studio 側でブロックごとに再配置しやすいよう、役割ごとに素直な要素へ分けています。
+            </p>
+          </div>
+        </section>
+
+        <section class="section section-muted" id="section-explanation" aria-labelledby="explanation-title">
+          <div class="container cards">
+            <div class="section-heading">
+              <p class="section-label">Section 03 / Explanation Cards</p>
+              <p class="eyebrow">Explanation</p>
+              <h2 id="explanation-title">差し替えやすさを分解して確認する</h2>
+            </div>
+            <article class="card content-block">
+              <h3>見出し差し替え</h3>
+              <p class="text-slot">タイトルと本文を個別に編集しても、構造が崩れないかを見る。</p>
+            </article>
+            <article class="card content-block">
+              <h3>画像差し替え</h3>
+              <p class="text-slot">画像領域のサイズ変更や置き換えが、Wix Studio 上で扱いやすいかを見る。</p>
+            </article>
+            <article class="card content-block">
+              <h3>CTA 再配置</h3>
+              <p class="text-slot">ボタン文言やリンク先を変更しやすく、再配置も容易かを確認する。</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" id="section-cta" aria-labelledby="cta-title">
+          <div class="container cta-panel">
+            <div class="content-block">
+              <p class="section-label">Section 04 / CTA</p>
+              <p class="eyebrow">Call To Action</p>
+              <h2 id="cta-title">最小構成で持ち込み、再編集性を先に判断する</h2>
+              <p class="text-slot">
+                まずは 1 ページまたは 1 セクション相当で検証し、問題がなければ次の単位へ広げます。
+              </p>
+            </div>
+            <a class="button button-primary cta-slot" href="#">CTA Placeholder</a>
+          </div>
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <div class="container footer-row">
+          <p>Prototype for Wix Studio validation</p>
+          <p>Text / Image / CTA / Section order editable</p>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
