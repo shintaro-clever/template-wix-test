@@ -6,12 +6,12 @@
 
 | 変数名 | 説明 | 現テンプレの値（参考） | 新案件で設定する値 |
 |---|---|---|---|
-| `TEMPLATE_REPO_NAME` | このテンプレート基盤リポジトリ名 | `ryoochi-wix-site` | ← 変更可（リネーム時） |
-| `TEMPLATE_REPO_URL` | テンプレート基盤の GitHub URL | `https://github.com/<org>/ryoochi-wix-site` | 新テンプレの URL |
-| `WORKING_REPO_NAME` | 実働先リポジトリ名（Wix 生成） | `my-site-1` | Wix Studio が生成したリポジトリ名 |
-| `WORKING_REPO_URL` | 実働先の GitHub URL | `https://github.com/<org>/my-site-1` | Wix Studio が生成したリポジトリの URL |
+| `TEMPLATE_REPO_NAME` | このテンプレート基盤リポジトリ名 | `<template-repo-name>` | リネーム後のテンプレ名 |
+| `TEMPLATE_REPO_URL` | テンプレート基盤の GitHub URL | `https://github.com/<org>/<template-repo-name>` | 新テンプレの URL |
+| `WORKING_REPO_NAME` | 実働先リポジトリ名（Wix 生成） | `<working-repo-name>` | Wix Studio が生成したリポジトリ名 |
+| `WORKING_REPO_URL` | 実働先の GitHub URL | `https://github.com/<org>/<working-repo-name>` | Wix Studio が生成したリポジトリの URL |
 | `SITE_ID` | Wix サイト ID | `<siteId>`（案件ごとに異なる） | `wix.config.json` の `siteId` |
-| `SITE_NAME` | Wix サイト名 / 表示名 | `my-site-1` | Wix Studio 上のサイト名 |
+| `SITE_NAME` | Wix サイト名 / 表示名 | `<site-name>` | Wix Studio 上のサイト名 |
 | `WIX_API_KEY` | Wix CLI 認証用 API キー（GitHub Secret 名） | `WIX_API_KEY`（変更不要） | Wix ダッシュボードで発行した値を Secret に設定 |
 | `NPM_TOKEN` | npm レジストリ認証トークン（GitHub Secret 名） | `NPM_TOKEN`（変更不要） | npm アクセストークンを Secret に設定 |
 

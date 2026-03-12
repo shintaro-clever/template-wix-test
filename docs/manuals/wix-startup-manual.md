@@ -12,7 +12,7 @@
 ```
 テンプレート基盤（本リポジトリ）
   └─ 片方向ミラー ──→  実働先（Wix Studio GitHub Integration が生成したリポジトリ）
-                         例: my-site-1
+                         例: Wix Studio が生成した実働先リポジトリ
 ```
 
 ### 同期方針の定義
@@ -39,7 +39,7 @@ Wix CLI（`@wix/cli`）は `src/pages/masterPage.js` を含む Velo コード構
 
 **理由 2：実働先に合わせようとするより破綻しにくい**
 
-過去の試行では、テンプレート側リポジトリ（`ryoochi-wix-site`）に `src/` をコピーして連携しようとしました。しかし `wix preview --source remote` が参照するのは「Wix が認識しているリポジトリ（`my-site-1`）」であり、テンプレート側での変更は Wix 側に届きませんでした。CI が成功しているのにデザインが一切反映されないという、原因が見えない破綻が起きました。
+過去の試行では、テンプレート側リポジトリに `src/` をコピーして連携しようとしました。しかし `wix preview --source remote` が参照するのは「Wix が認識している実働先リポジトリ」であり、テンプレート側での変更は Wix 側に届きませんでした。CI が成功しているのにデザインが一切反映されないという、原因が見えない破綻が起きました。
 
 **理由 3：障害切り分けがしやすい**
 
@@ -119,7 +119,7 @@ Phase 3: 本制作・日常運用
 ### 管理者が行うこと（3ステップ）
 
 **Step 1：Wix Studio GitHub Integration で実働先リポジトリを生成する**
-- Wix Studio エディター → GitHub Integration → 新規リポジトリを作成（例: `my-site-1`）
+- Wix Studio エディター → GitHub Integration → 新規リポジトリを作成
 - Wix が `src/`（Velo コード構造）と `wix.config.json` を自動生成してプッシュする
 - この生成リポジトリが **実働先** になる（テンプレート基盤と別リポジトリ）
 

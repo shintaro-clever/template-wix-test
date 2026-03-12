@@ -1,4 +1,4 @@
-# ryoochi-wix-site（テンプレート基盤）
+# Wix Template Base
 
 本リポジトリは Wix Studio 案件の **テンプレート基盤** です。
 CI・ドキュメント・AI ルール・スクリプト等の運用資産を管理し、実働先リポジトリへ片方向でミラーして使います。
@@ -7,19 +7,19 @@ CI・ドキュメント・AI ルール・スクリプト等の運用資産を管
 
 | リポジトリ | 役割 | 編集するもの |
 |---|---|---|
-| **ryoochi-wix-site**（本リポジトリ） | **テンプレート基盤** | CI・docs・agents・scripts・マニュアル |
-| **my-site-1** | **実働先** | Wix Studio 上のビジュアル編集・`src/` の Velo コード |
+| **本リポジトリ** | **テンプレート基盤** | CI・docs・agents・scripts・マニュアル |
+| **実働先リポジトリ** | **実働先** | Wix Studio 上のビジュアル編集・`src/` の Velo コード |
 
 ### どの変更をどちらに入れるか
 
 | 変更の種類 | 編集先 |
 |---|---|
-| CI ワークフローの修正 | ryoochi-wix-site（テンプレート）→ migrate で実働先へ反映 |
-| マニュアル・ドキュメントの更新 | ryoochi-wix-site（テンプレート）→ migrate で実働先へ反映 |
-| AI ルール（agents/）の更新 | ryoochi-wix-site（テンプレート）→ migrate で実働先へ反映 |
-| Wix ページのビジュアル編集 | my-site-1（実働先）の Wix Studio 上で直接編集 |
-| Velo コード（`src/`）の修正 | my-site-1（実働先）で直接編集。テンプレートへ持ち込まない |
-| `wix.config.json` の変更 | my-site-1（実働先）のみ。テンプレートへ持ち込まない |
+| CI ワークフローの修正 | テンプレート基盤で編集 → migrate で実働先へ反映 |
+| マニュアル・ドキュメントの更新 | テンプレート基盤で編集 → migrate で実働先へ反映 |
+| AI ルール（agents/）の更新 | テンプレート基盤で編集 → migrate で実働先へ反映 |
+| Wix ページのビジュアル編集 | 実働先リポジトリの Wix Studio 上で直接編集 |
+| Velo コード（`src/`）の修正 | 実働先リポジトリで直接編集。テンプレートへ持ち込まない |
+| `wix.config.json` の変更 | 実働先リポジトリのみ。テンプレートへ持ち込まない |
 
 同期方向は **テンプレート基盤 → 実働先（片方向のみ）**。逆方向（実働先 → テンプレート）の同期は行わない。
 
@@ -37,6 +37,18 @@ bash /tmp/template/scripts/migrate-to-wix-repo.sh /tmp/working-repo
 ```
 
 詳細は `docs/wix/import-runbook.md` を参照。
+
+## テンプレート化で残すもの
+
+テンプレート化しても、次の運用資産は保持対象とする。
+
+- `agents/` と `.agents/`
+- `.github/PULL_REQUEST_TEMPLATE.md`
+- `.github/workflows/pr-ci.yml`
+- `.github/workflows/pr-gate.yml`
+- `scripts/pr-up.js`
+
+案件固有の接続履歴や `siteId` 固定値は整理対象だが、PR 運用と Skills の土台は削除対象にしない。
 
 ## CI の目的
 

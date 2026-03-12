@@ -3,9 +3,9 @@
 ## Phase 1：技術セットアップ（管理者担当）
 
 ### Step 1：Wix 生成リポジトリの用意
-- 確認する: Wix Studio GitHub Integration で実働先リポジトリを生成した（実働先は my-site-1 等の Wix 生成リポジトリ）
+- 確認する: Wix Studio GitHub Integration で実働先リポジトリを生成した（実働先は Wix 生成リポジトリ）
 - 確認する: GitHub 上にリポジトリが存在し、Wix がプッシュしたファイルが含まれている
-- 触らない: テンプレート基盤（ryoochi-wix-site）を実働先として使わない（Wix は自身が生成したリポジトリしか認識しない）
+- 触らない: テンプレート基盤を実働先として使わない（Wix は自身が生成したリポジトリしか認識しない）
 
 ### Step 2：wix.config.json の確認
 - 確認する: `wix.config.json` がリポジトリ直下に存在する

@@ -37,8 +37,8 @@ cd /tmp/working-repo && git status
 
 | リポジトリ | 役割 |
 |---|---|
-| `ryoochi-wix-site`（本リポジトリ） | **テンプレート基盤**。CI・ドキュメント・AI ルール等を管理する |
-| 実働先（例: `my-site-1`） | **実働先**。Wix Studio GitHub Integration が生成した Wix 連携リポジトリ |
+| テンプレート基盤（本リポジトリ） | **テンプレート基盤**。CI・ドキュメント・AI ルール等を管理する |
+| 実働先リポジトリ | **実働先**。Wix Studio GitHub Integration が生成した Wix 連携リポジトリ |
 
 同期方向は **テンプレート基盤 → 実働先（片方向のみ）**。逆方向の同期は行わない。
 

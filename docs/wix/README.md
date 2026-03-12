@@ -1,7 +1,7 @@
 # Wix Docs
 
-このディレクトリはテンプレート基盤（ryoochi-wix-site）の Wix 関連ドキュメントを置く。
-実働先は **Wix Studio GitHub Integration が生成したリポジトリ**（例: `my-site-1`）。
+このディレクトリはテンプレート基盤の Wix 関連ドキュメントを置く。
+実働先は **Wix Studio GitHub Integration が生成したリポジトリ** とする。
 
 ## ドキュメント構成
 
@@ -20,6 +20,8 @@
 - `src/` と `wix.config.json` は実働先が正本。テンプレート側から上書きしない
 - `main` push → `wix preview --source remote` でプレビュー URL を生成する（本番公開ではない）
 - 本番公開は課金・ドメイン整備後に管理者が手動で実施する
+- `agents/` `.agents/` `.github/` `scripts/pr-up.js` はテンプレート運用の土台として保持する
+- 案件固有の接続履歴、検証ログ、`siteId` 固定値はテンプレート側へ残しすぎない
 
 ## 補助コマンド（テンプレート側での確認用）
 
