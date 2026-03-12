@@ -3,7 +3,23 @@
 ## 目的
 - `prototype/minimum-page/` の静的 HTML/CSS を、Wix Studio 案件へ持ち込むときの手順を固定する
 - CLI でやることと Studio 側でやることを分け、毎回の迷いを減らす
-- 次回の再開は prototype 修正ではなく、Studio ブラウザの認証導線確認から始める
+- GitHub ↔ Wix 連携の技術セットアップ（Step 0）を先に完了してから持ち込み作業に入る
+
+## 0. 技術セットアップ（初回のみ・別案件でも同じ手順）
+
+GitHub ↔ Wix 連携が未設定の場合、先に以下を完了する。
+詳細は `docs/wix/connection-plan.md` を参照。
+
+### チェックリスト
+- `wix.config.json` がリポジトリ直下にあり `siteId` と `uiVersion: "6"` が設定されている
+- GitHub Secrets に `WIX_API_KEY` が設定されている
+- `src/` ディレクトリが存在し `src/pages/masterPage.js` が含まれている
+- `main` push → `wix publish --approve-preview` の CI が通ることを確認済み
+
+### src/ がない場合の初期化手順（要点のみ）
+1. Wix Studio GitHub Integration で一時リポジトリ（例: `my-site-init`）を作成
+2. 生成された `src/` を本リポジトリにコピー: `cp -r /tmp/wix-init-tmp/src ./`
+3. コミット・PR・main マージ → CI で動作確認
 
 ## 1. Studio ブラウザでログイン状態確認
 
