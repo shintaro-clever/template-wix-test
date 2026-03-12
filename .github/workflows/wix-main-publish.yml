@@ -1,0 +1,51 @@
+name: wix-main-publish
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wix-main-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.0
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Verify Wix site connection
+        run: |
+          if [ ! -f wix.config.json ]; then
+            echo "::error::wix.config.json is missing. Connect this repository to Wix Studio Git Integration first."
+            exit 1
+          fi
+
+          if [ -z "${WIX_API_KEY}" ]; then
+            echo "::error::WIX_API_KEY secret is missing."
+            exit 1
+          fi
+        env:
+          WIX_API_KEY: ${{ secrets.WIX_API_KEY }}
+
+      - name: Login to Wix CLI
+        run: npx wix login --api-key "$WIX_API_KEY"
+        env:
+          WIX_API_KEY: ${{ secrets.WIX_API_KEY }}
+
+      - name: Publish Wix site from main
+        run: npx wix publish --source remote --approve-preview
