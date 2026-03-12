@@ -1,17 +1,34 @@
 # Wix Startup Manual
 
 ## このマニュアルについて
-- この文書は、非エンジニアが Wix Studio 案件を立ち上げるときに最初に読むためのものです
+- この文書は、Wix Studio 案件を立ち上げるときに最初に読むためのものです
 - 目的は、案件開始時にやることの順番を迷わないようにすることです
 - 技術的に深い操作は扱わず、必要な場合は管理者へ確認します
+
+## 前提：リポジトリの母体はどちらか
+
+**Wix Studio GitHub Integration で生成したリポジトリを母体にします。**
+
+Wix Studio の GitHub Integration でリポジトリを作成すると、Wix と GitHub が正しく連携した状態のリポジトリが生成されます。このリポジトリに対して、CI 設定・ドキュメント・AI 管理ルールなどのツール群をインストールする形が推奨です。
+
+```
+推奨構成
+  Wix Studio GitHub Integration
+    └─ 生成リポジトリ（例: my-site-1）← 母体
+         └─ ここに CI / docs / agents などをインストール
+```
+
+> **非推奨（過去の試行）**：既存リポジトリに `src/` だけをコピーして連携する方法は、
+> Wix 側が認識する GitHub リポジトリと一致しないため機能しません。
+> この手順は現在の主線ではありません。
 
 ## 案件立ち上げの全体フロー
 
 ```
 Phase 1: 技術セットアップ（管理者が担当）
-  └─ GitHub リポジトリ準備
-  └─ Wix GitHub 連携（src/ 初期化・wix.config.json 設定）
-  └─ CI 動作確認（main push → 自動公開）
+  └─ Wix Studio GitHub Integration でリポジトリ生成
+  └─ 生成リポジトリに CI / docs / agents をインストール
+  └─ CI 動作確認（main push → wix preview 生成）
 
 Phase 2: Wix Studio 最小検証（非エンジニアも参加）
   └─ Wix Studio にログイン
@@ -20,7 +37,8 @@ Phase 2: Wix Studio 最小検証（非エンジニアも参加）
 
 Phase 3: 本制作・日常運用
   └─ Wix Studio 上でビジュアル編集
-  └─ main push で自動公開（CI が処理）
+  └─ main push → wix preview で確認
+  └─ 本番公開は手動（ドメイン・課金整備後）
 ```
 
 ## 1. 何を準備するか
@@ -41,13 +59,14 @@ Phase 3: 本制作・日常運用
 非エンジニアは直接操作しなくてよいが、内容を把握しておく。
 
 ### 管理者が行うこと
-- GitHub リポジトリに `wix.config.json` を設置（サイトIDと接続情報）
-- Wix Studio の GitHub Integration で一時リポジトリを作成し、`src/` を本リポジトリにコピー
-- GitHub Actions の CI が `main` push で `wix publish` を実行することを確認
+1. Wix Studio エディターで GitHub Integration を開き、**新規リポジトリを生成**する
+2. 生成されたリポジトリに CI ワークフロー・ドキュメント・AI 管理ルールをインストールする
+3. `WIX_API_KEY` を GitHub Secrets に設定する
+4. `main` push → `wix preview` が動作することを CI で確認する
 
 ### 完了の目安
-- `main` にコードをプッシュすると Wix Studio のサイトに自動反映される
-- Wix Studio で編集した内容が本番公開できる状態になっている
+- `main` にコードをプッシュするとプレビューURLが生成される
+- Wix Studio 上でコードの変更が反映されることを確認できている
 
 ## 3. Phase 2：Wix Studio 最小検証
 
@@ -80,11 +99,11 @@ Phase 3: 本制作・日常運用
 
 ### 日常の更新フロー
 1. Wix Studio 上でビジュアル編集
-2. 確認したら「公開」ボタン（または管理者が `main` push で自動公開）
-3. 本番反映を確認
+2. 確認したら Wix Studio の「公開」ボタン
+3. コード変更がある場合は `main` push → プレビューURLで確認
 
 ### 公開の仕組み（参考）
-- `main` ブランチへのプッシュで GitHub Actions が自動的に `wix preview` を実行する
+- `main` ブランチへのプッシュで GitHub Actions が `wix preview` を実行する
 - プレビューURLが生成されるが、本番公開はしない
 - 本番公開（`wix publish`）はドメイン設定・課金が整った後に管理者が手動で行う
 - 非エンジニアは基本的に Wix Studio の画面操作だけで作業が完結する
@@ -96,7 +115,7 @@ Phase 3: 本制作・日常運用
 - 画像や文言が足りず、検証対象が決められない
 - 本番全体を先に作りたくなってしまう
 - 画面上の調整で済むのか、管理者確認が必要なのか判断できない
-- `main` に push したのにサイトが更新されない
+- `main` に push したのにプレビューが更新されない
 
 ### 迷ったときの考え方
 - まずは最小単位で検証する
@@ -109,7 +128,7 @@ Phase 3: 本制作・日常運用
 - 静的原型を作り直す必要がありそうなとき
 - Wix Studio 上の調整だけでは吸収できない構造変更が出たとき
 - 本制作へ進むか、方針を修正するかの判断が必要なとき
-- CI が失敗して自動公開されないとき
+- CI が失敗してプレビューが生成されないとき
 
 ## 補足
 - Phase 1 の技術手順の詳細は `docs/wix/connection-plan.md` を参照
