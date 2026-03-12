@@ -2,22 +2,40 @@
 
 ## Phase 1：技術セットアップ（管理者担当）
 
-### リポジトリ準備
-- 確認する: Wix Studio GitHub Integration で生成したリポジトリが存在する（母体は Wix 生成リポジトリ）
-- 確認する: `wix.config.json` が `siteId` と `uiVersion: "6"` を含む状態でコミット済み
-- 確認する: GitHub Secrets に `WIX_API_KEY` が設定されている
-- 確認する: `.github/workflows/wix-preview-on-push.yml` が存在する
+### Step 1：Wix 生成リポジトリの用意
+- 確認する: Wix Studio GitHub Integration でリポジトリを生成した（母体は Wix 生成リポジトリ）
+- 確認する: GitHub 上にリポジトリが存在し、Wix がプッシュしたファイルが含まれている
+- 触らない: 既存リポジトリを母体にしない（Wix は自身が生成したリポジトリしか認識しない）
 
-### Velo 構造初期化
-- 確認する: `src/pages/masterPage.js` が存在する（Wix Studio GitHub Integration が自動生成する）
+### Step 2：wix.config.json の確認
+- 確認する: `wix.config.json` がリポジトリ直下に存在する
+- 確認する: `siteId` が Wix 生成の値で設定されている
+- 確認する: `uiVersion: "6"` が含まれている（ない場合は手動追記してコミットする）
+- 触らない: `siteId` を既存リポジトリ側の値で上書きしない
+
+### Step 3：src/ の存在確認
+- 確認する: `src/pages/masterPage.js` が存在する（Wix Studio GitHub Integration が自動生成）
 - 確認する: `src/backend/permissions.json` が存在する
+- 確認する: `src/styles/global.css` が存在する
 - 触らない: `src/` を既存リポジトリのファイルで上書きしない（Wix 生成構造を維持する）
 
-### CI 動作確認
+### Step 4：WIX_API_KEY の設定
+- 確認する: Wix ダッシュボードで API キーを発行済み
+- 確認する: 生成リポジトリの Settings → Secrets → Actions に `WIX_API_KEY` が設定されている
+
+### Step 5：CI 動作確認（wix preview --source remote）
+- 確認する: `.github/workflows/wix-preview-on-push.yml` が存在する
 - 確認する: `main` push 後に GitHub Actions `wix-preview-on-push` が SUCCESS になる
 - 確認する: Actions ログにプレビュー URL（`https://wix.to/...`）が出力されている
-- 触らない: CI が失敗している状態のまま Phase 2 に進まない
+- 触らない: CI が失敗している状態のまま次のステップに進まない
 - 覚える: このワークフローはプレビュー URL を生成するのみで、本番公開は行わない
+
+### Step 6：既存 GitHub 資産の移植確認
+- 確認する: `.github/workflows/` に CI ワークフローが移植されている
+- 確認する: `agents/`、`docs/`、`scripts/`、`prototype/` が移植されている
+- 確認する: `AGENTS.md`、`CLAUDE.md`、`README.md` が存在する
+- 確認する: `package.json` に `@wix/cli` devDependency が追記されている
+- 触らない: 移植時に `src/` や `wix.config.json` を既存側の内容で上書きしない
 
 ## Phase 2：最小検証（非エンジニアも参加）
 
