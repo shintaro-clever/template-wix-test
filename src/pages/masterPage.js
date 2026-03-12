@@ -2,6 +2,5 @@
 // “Hello, World!” Example: https://learn-code.wix.com/en/article/hello-world
 
 $w.onReady(function () {
-    // GitHub連携テスト 2026-03-12
-    console.log('[test] masterPage loaded from GitHub');
+    // サイト共通の初期化処理をここに記述する
 });
