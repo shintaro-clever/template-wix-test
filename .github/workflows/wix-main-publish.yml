@@ -48,4 +48,4 @@ jobs:
           WIX_API_KEY: ${{ secrets.WIX_API_KEY }}
 
       - name: Publish Wix site from main
-        run: npx wix publish --source remote --approve-preview
+        run: npx wix publish --approve-preview
