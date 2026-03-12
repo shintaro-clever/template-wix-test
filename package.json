@@ -1,13 +1,15 @@
 {
-  "name": "figma-ai-github-workflow",
+  "name": "ryoochi-wix-site",
   "version": "1.0.0",
   "type": "commonjs",
   "scripts": {
+    "test": "npm run check:structure && npm run check:sot-dup",
     "check:structure": "node scripts/check-structure.js",
     "check:sot-dup": "node scripts/check-sot-dup.js"
   },
-  "dependencies": {},
-  "devDependencies": {},
+  "devDependencies": {
+    "@wix/cli": "^1.1.166"
+  },
   "volta": {
     "node": "22.22.0"
   }
