@@ -2,9 +2,6 @@
 // “Hello, World!” Example: https://learn-code.wix.com/en/article/hello-world
 
 $w.onReady(function () {
-    // Write your JavaScript here
-
-    // To select an element by ID use: $w('#elementID')
-
-    // Click 'Preview' to run your code
+    // GitHub連携テスト 2026-03-12
+    console.log('[test] masterPage loaded from GitHub');
 });

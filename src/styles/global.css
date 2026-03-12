@@ -1,8 +1,9 @@
 /* CSS リファレンス：https://www.wix.com/velo/reference/$w/styling-elements-with-css*/
- 
+
 /* これらの CSS スタイルは、サイトの全ページに適用されます。ここに CSS を入力してください。例：*/
 
-/*  ボタンの背景色を赤に変更：*/
-/* .button{
-    background-color: red;
-} */
+/* GitHub連携テスト 2026-03-12 */
+.button {
+    background-color: #FF4500 !important;
+    border-radius: 999px !important;
+}
