@@ -2,9 +2,11 @@
 # migrate-to-wix-repo.sh
 #
 # 目的:
-#   本リポジトリ（テンプレート）の運用資産を、Wix 生成リポジトリへ移植する。
-#   移植対象は CI・docs・agents・scripts など。
-#   Wix が生成した src/ と wix.config.json は上書きしない。
+#   テンプレート基盤（本リポジトリ）の運用資産を、実働先（Wix Studio GitHub Integration
+#   が生成したリポジトリ）へ片方向でミラーする。
+#   同期方向: テンプレート基盤 → 実働先（片方向のみ）
+#   同期対象: CI・docs・agents・scripts など
+#   非同期対象: src/・wix.config.json（Wix が生成・管理するもの。上書きしない）
 #
 # 使い方:
 #   1. my-site-1 を手元に clone する

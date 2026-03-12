@@ -10,6 +10,29 @@
 GitHub ↔ Wix 連携が未設定の場合、先に以下を完了する。
 詳細は `docs/wix/connection-plan.md` を参照。
 
+### ryoochi-wix-site → my-site-1 移植の実行方法
+
+このCodespaceのトークンは `ryoochi-wix-site` にのみスコープされているため、
+`my-site-1` への直接プッシュはローカル環境で行う。
+
+**方法 A：`scripts/migrate-to-wix-repo.sh` を使う（推奨）**
+```bash
+git clone https://github.com/shintaro-clever/ryoochi-wix-site /tmp/ryoochi
+git clone https://github.com/shintaro-clever/my-site-1 /tmp/my-site-1
+bash /tmp/ryoochi/scripts/migrate-to-wix-repo.sh /tmp/my-site-1
+cd /tmp/my-site-1 && git status
+```
+
+**方法 B：zip バンドルを使う**
+1. Codespace のファイルブラウザから `/tmp/migration-bundle.zip` をダウンロード
+2. `my-site-1` のローカルクローンに展開する
+3. `git status` で差分を確認してコミット
+
+**どちらの方法でも確認すること：**
+- `my-site-1/src/` に差分が出ていないこと
+- `my-site-1/wix.config.json` に差分が出ていないこと
+- `my-site-1/package.json` には `@wix/cli` が追記されているだけで他は変わっていないこと
+
 ### リポジトリの役割
 
 | リポジトリ | 役割 |
