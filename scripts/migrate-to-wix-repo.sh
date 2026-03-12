@@ -9,11 +9,11 @@
 #   非同期対象: src/・wix.config.json（Wix が生成・管理するもの。上書きしない）
 #
 # 使い方:
-#   1. my-site-1 を手元に clone する
-#      git clone https://github.com/shintaro-clever/my-site-1 /path/to/my-site-1
+#   1. 実働先リポジトリを手元に clone する
+#      git clone <実働先の GitHub URL> /path/to/working-repo
 #   2. 本スクリプトを実行する
-#      bash scripts/migrate-to-wix-repo.sh /path/to/my-site-1
-#   3. my-site-1 側で差分を確認し、コミット・PR を作成する
+#      bash scripts/migrate-to-wix-repo.sh /path/to/working-repo
+#   3. 実働先で差分を確認し、コミット・PR を作成する
 
 set -euo pipefail
 
@@ -23,7 +23,7 @@ TARGET_DIR="${1:-}"
 # --- 引数チェック ---
 if [ -z "$TARGET_DIR" ]; then
   echo "使い方: bash $0 <移植先ディレクトリ>"
-  echo "例:     bash $0 /path/to/my-site-1"
+  echo "例:     bash $0 /path/to/working-repo"
   exit 1
 fi
 

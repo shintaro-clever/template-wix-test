@@ -10,39 +10,39 @@
 GitHub ↔ Wix 連携が未設定の場合、先に以下を完了する。
 詳細は `docs/wix/connection-plan.md` を参照。
 
-### ryoochi-wix-site → my-site-1 移植の実行方法
+### テンプレート基盤 → 実働先への移植実行方法
 
-このCodespaceのトークンは `ryoochi-wix-site` にのみスコープされているため、
-`my-site-1` への直接プッシュはローカル環境で行う。
+Codespace のトークンはテンプレート基盤リポジトリにのみスコープされているため、
+実働先への直接プッシュはローカル環境で行う。
 
 **方法 A：`scripts/migrate-to-wix-repo.sh` を使う（推奨）**
 ```bash
-git clone https://github.com/shintaro-clever/ryoochi-wix-site /tmp/ryoochi
-git clone https://github.com/shintaro-clever/my-site-1 /tmp/my-site-1
-bash /tmp/ryoochi/scripts/migrate-to-wix-repo.sh /tmp/my-site-1
-cd /tmp/my-site-1 && git status
+git clone <テンプレート基盤のURL> /tmp/template
+git clone <実働先のURL> /tmp/working-repo
+bash /tmp/template/scripts/migrate-to-wix-repo.sh /tmp/working-repo
+cd /tmp/working-repo && git status
 ```
 
 **方法 B：zip バンドルを使う**
 1. Codespace のファイルブラウザから `/tmp/migration-bundle.zip` をダウンロード
-2. `my-site-1` のローカルクローンに展開する
+2. 実働先リポジトリのローカルクローンに展開する
 3. `git status` で差分を確認してコミット
 
 **どちらの方法でも確認すること：**
-- `my-site-1/src/` に差分が出ていないこと
-- `my-site-1/wix.config.json` に差分が出ていないこと
-- `my-site-1/package.json` には `@wix/cli` が追記されているだけで他は変わっていないこと
+- 実働先の `src/` に差分が出ていないこと
+- 実働先の `wix.config.json` に差分が出ていないこと
+- 実働先の `package.json` には `@wix/cli` が追記されているだけで他は変わっていないこと
 
 ### リポジトリの役割
 
 | リポジトリ | 役割 |
 |---|---|
 | `ryoochi-wix-site`（本リポジトリ） | **テンプレート基盤**。CI・ドキュメント・AI ルール等を管理する |
-| `my-site-1` | **実働先**。Wix Studio GitHub Integration が生成した Wix 連携リポジトリ |
+| 実働先（例: `my-site-1`） | **実働先**。Wix Studio GitHub Integration が生成した Wix 連携リポジトリ |
 
 同期方向は **テンプレート基盤 → 実働先（片方向のみ）**。逆方向の同期は行わない。
 
-### 移植対象（ryoochi-wix-site → my-site-1 へ持ち込む）
+### 移植対象（テンプレート基盤 → 実働先へ持ち込む）
 
 | 資産 | 備考 |
 |---|---|
@@ -80,7 +80,7 @@ cd /tmp/my-site-1 && git status
 - 現時点の阻害要因は `Wix Studio ブラウザ側の未ログインセッション` であると認識する
 
 ### 認証通過の定義
-- Wix Studio 認証が通ったと見なす条件は、対象 `site ID 0e9fab77-6694-464e-9f13-d5c320c88550` の案件画面が実際に表示されること
+- Wix Studio 認証が通ったと見なす条件は、対象 `site ID <siteId>` の案件画面が実際に表示されること
 - `Sign up / Log in` 画面でないだけでは認証通過としない
 - ログイン画面以外であっても、対象案件画面に未到達なら未通過として扱う
 
@@ -91,8 +91,8 @@ cd /tmp/my-site-1 && git status
 ## 2. 対象 URL 到達確認
 
 ### 固定対象
-- 対象 URL は `https://manage.wix.com/dashboard/0e9fab77-6694-464e-9f13-d5c320c88550/setup?referralInfo=my-sites`
-- 対象 `site ID` は `0e9fab77-6694-464e-9f13-d5c320c88550`
+- 対象 URL は `https://manage.wix.com/dashboard/<siteId>/setup?referralInfo=my-sites`
+- 対象 `site ID` は `<siteId>`
 
 ### Studio 側でやること
 - 上記 URL を開き、対象案件へ到達できるか確認する

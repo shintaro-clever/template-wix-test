@@ -8,16 +8,16 @@ CI・ドキュメント・AI ルール・スクリプト等の運用資産を管
 | リポジトリ | 役割 |
 |---|---|
 | **本リポジトリ**（ryoochi-wix-site） | テンプレート基盤。CI・docs・agents・scripts を管理する |
-| **my-site-1** | 実働先。Wix Studio GitHub Integration が生成した Wix 連携リポジトリ |
+| **実働先**（例: `my-site-1`） | 実働先。Wix Studio GitHub Integration が生成した Wix 連携リポジトリ |
 
 同期方向は **テンプレート基盤 → 実働先（片方向のみ）**。`src/` と `wix.config.json` は実働先が正本であり上書きしない。
 
 ## 実働先への資産移植
 
 ```bash
-git clone https://github.com/shintaro-clever/ryoochi-wix-site /tmp/ryoochi
-git clone https://github.com/shintaro-clever/my-site-1 /tmp/my-site-1
-bash /tmp/ryoochi/scripts/migrate-to-wix-repo.sh /tmp/my-site-1
+git clone <テンプレート基盤の GitHub URL> /tmp/template
+git clone <実働先の GitHub URL> /tmp/working-repo
+bash /tmp/template/scripts/migrate-to-wix-repo.sh /tmp/working-repo
 ```
 
 詳細は `docs/wix/import-runbook.md` を参照。
