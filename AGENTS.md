@@ -108,6 +108,73 @@ git checkout -b issue-<number>-<slug>
 
 ---
 
+## Dispatcher 共通運用ルール
+
+Claude Code / Codex が Issue を自律実行する際の境界ルール。詳細正本は `~/.claude/CLAUDE.md`。
+
+### 基本方針
+
+- 正本は Sheets
+- エージェントは受け身ではなく、取得・記録・判定まで能動的に行う
+- 人間は `human_review_waiting` のみ確認し、マージ判断を行う
+- AIの担当範囲の終点は `human_review_waiting`（マージ・ブランチ削除・post-merge後処理はしない）
+
+### 継続実行・途中確認禁止
+
+- 停止条件に当たるまで継続して進める。状態確認だけで止まらない
+- 停止条件以外でユーザーへの途中確認を禁止する（「このまま進めてよいですか」等は運用違反）
+- 曖昧さがある場合は、既存ルール・既存実装・最小差分を優先して自律判断する
+
+### 実行ルール
+
+- このIssue達成に必要な最小差分のみ実施する
+- 必要なテストを行う
+- PRが未作成ならPRを作成する（`unset GITHUB_TOKEN && node scripts/pr-up.js`）
+- PR作成後は最新 main との競合有無を確認する
+- 競合があれば最小範囲で解消してテストを再実行する
+- codexResult / autoReview / Sheets / Issueコメントを更新する
+- PR未作成のまま `human_review_waiting` にしない
+- `human_review_waiting` に上げるのは、実装・テスト・push・PR・必要記録が揃った場合のみ
+
+### 禁止事項（Dispatcher実行中）
+
+- PRのマージ・ブランチ削除・人間確認前のpost-merge処理
+- 他Issueに関する変更・無関係なファイル編集・新仕様の追加
+- 既存ルール・デザイン方針の勝手な変更・大きなリファクタ
+- 問題を隠したまま `human_review_waiting` に上げること
+- 複数Issueの同時起票・勝手なスコープ拡張
+
+### 判断ルール
+
+- 依存未解消なら `blocked`、即着手可能なら `queued`
+- PR未作成なら `human_review_waiting` にしない
+- 競合解消が安全にできるなら解消して進める。影響範囲が広がる場合は `blocked`
+- 複数候補がある場合は、優先度が高く・低リスク・依存の少ないものを選ぶ
+- 迷ったら最小差分で止める
+
+### 停止条件
+
+1. `human_review_waiting` 到達
+2. `blocked`
+3. `auto_review_failed`
+4. `StopAt` 到達
+5. トークン残量がしきい値以下
+
+### 停止時に必ず残す情報
+
+停止理由 / 現在タスク・ステータス / 完了済みステップ / 未完了ステップ / 次アクション / branch・PR・commit / 競合情報（あれば）
+
+### 次Issueルール
+
+- 明示した場合を除き、自動起票または Queue 追加は **1件まで**
+- 次Issueが既に決まっている場合は `queued` にする
+- 未設定の場合は親Issue・未完了スコープ・既存キューから最も整合する1件を選ぶ
+- 既存Issueで代替できる場合は新規起票より Queue 更新を優先する
+- 複数件の起票または連続実行が明示された場合のみ複数件を扱ってよい（同一テーマ・低依存を優先）
+- 根拠を記録する
+
+---
+
 ## PR Workflow ("PR あげてください")
 
 After completing a task, **MUST** run:
