@@ -30,6 +30,7 @@ These rules are absolute. No exceptions, no overrides.
 - `.env` / `auth.json` の内容を Codex に表示させること**禁止**。
 - `/tmp/pr.md` の手動編集**禁止**（スクリプトが上書きする）。
 - `.github/PULL_REQUEST_TEMPLATE.md` のプレースホルダー変更**禁止**（`gen-pr-body.js` が壊れる）。
+- `$()` command substitution を本文・JSON 渡しに使わない。一時ファイル経由で渡す（詳細: `agents/rules/45-shell-patterns.md`）。
 
 ---
 
