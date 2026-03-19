@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const fs = require("fs");
+const https = require("https");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
@@ -93,7 +94,15 @@ function writeJsonTempFile(payload) {
 }
 
 function getDefaultBranch(token, repo) {
-  return mustGh(token, ["api", `repos/${repo}`, "--jq", ".default_branch"]);
+  const result = run("gh", ["api", `repos/${repo}`, "--jq", ".default_branch"], {
+    env: { ...process.env, GH_TOKEN: token, GITHUB_TOKEN: token },
+  });
+  if (result.status === 0) {
+    const name = (result.stdout || "").trim();
+    if (name) return name;
+  }
+  console.error("[PR-UP] Could not detect default branch, falling back to \"main\"");
+  return "main";
 }
 
 function getExistingPrNumber(token, repo, owner, branch) {
@@ -154,7 +163,24 @@ function createOrUpdatePr(token, repo, branch, base, title, body) {
   return { action: "Created", url, prNumber: null };
 }
 
-function main() {
+function checkNetwork(timeoutMs = 3000) {
+  return new Promise((resolve) => {
+    const req = https.request(
+      { method: "HEAD", host: "github.com", path: "/", timeout: timeoutMs },
+      (res) => {
+        const ok = res.statusCode && res.statusCode >= 200 && res.statusCode < 400;
+        resolve({ ok, detail: ok ? null : `status=${res.statusCode}` });
+      }
+    );
+    req.on("timeout", () => { req.destroy(new Error("timeout")); });
+    req.on("error", (error) => {
+      resolve({ ok: false, detail: error && error.message ? error.message : "network error" });
+    });
+    req.end();
+  });
+}
+
+async function main() {
   const branch = must("git", ["rev-parse", "--abbrev-ref", "HEAD"]);
   if (branch === "main" || branch === "master") {
     console.error(`[PR-UP] REFUSED: current branch is ${branch}. Create a feature branch first.`);
@@ -171,9 +197,22 @@ function main() {
   const title = must("git", ["log", "-1", "--pretty=%s"]);
   const body = fs.readFileSync("/tmp/pr.md", "utf8");
 
+  const netCheck = await checkNetwork(3000);
+  if (!netCheck.ok) {
+    const detail = netCheck.detail || "(詳細なし)";
+    console.error(`[PR-UP] NET_NG: ネットワーク到達不可 (${detail})`);
+    console.error("[PR-UP] ネットワークが回復したら以下を実行してください:");
+    console.error(`  git push -u origin ${branch}`);
+    console.error(`  gh pr create --repo ${repo} --base ${base} --head ${branch} --title "${title}" --body-file /tmp/pr.md`);
+    process.exit(1);
+  }
+
   mustGitPush(["push", "-u", "origin", branch]);
   const result = createOrUpdatePr(token, repo, branch, base, title, body);
   console.log(`[PR-UP] ${result.action} PR: ${result.url}`);
 }
 
-main();
+main().catch((error) => {
+  console.error(error.message || error);
+  process.exitCode = 1;
+});
