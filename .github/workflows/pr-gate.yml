@@ -2,7 +2,7 @@ name: PR Gate
 
 on:
   pull_request:
-    types: [opened, edited, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   pull-requests: read
@@ -11,6 +11,7 @@ jobs:
   validate:
     name: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: PR本文を検証（関連Issue or No Issue + ACチェック）
