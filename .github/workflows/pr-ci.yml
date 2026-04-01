@@ -15,6 +15,7 @@ concurrency:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       selftest: ${{ steps.filter.outputs.selftest }}
       e2e_basic: ${{ steps.filter.outputs.e2e_basic }}
@@ -39,6 +40,7 @@ jobs:
 
   selftest:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: changes
     if: needs.changes.outputs.selftest == 'true'
     steps:
@@ -56,6 +58,7 @@ jobs:
 
   e2e-basic:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: changes
     if: needs.changes.outputs.e2e_basic == 'true' && hashFiles('scripts/run-job.js') != '' && hashFiles('scripts/sample-job.mcp.offline.smoke.json') != ''
     steps:
