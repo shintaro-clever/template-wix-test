@@ -1,7 +1,0 @@
-{
-  "name": "figma-ai-github-workflow",
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
-  "remoteEnv": {
-    "GITHUB_PAT_TOKEN": "${localEnv:GITHUB_PAT_TOKEN}"
-  }
-}
