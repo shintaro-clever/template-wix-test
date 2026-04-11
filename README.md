@@ -1,69 +1,113 @@
-# Wix Template Base
+# Wix Studio テンプレート
 
-本リポジトリは Wix Studio 案件の **テンプレート基盤** です。
-CI・ドキュメント・AI ルール・スクリプト等の運用資産を管理し、実働先リポジトリへ片方向でミラーして使います。
+Wix Studio 案件を素早く立ち上げるためのテンプレートリポジトリです。
+Claude Code によるデザインレビュー・品質管理・Velo コード開発のワークフローが組み込まれています。
 
-## リポジトリの役割（最終確定）
+---
 
-| リポジトリ | 役割 | 編集するもの |
-|---|---|---|
-| **本リポジトリ** | **テンプレート基盤** | CI・docs・agents・scripts・マニュアル |
-| **実働先リポジトリ** | **実働先** | Wix Studio 上のビジュアル編集・`src/` の Velo コード |
+## このテンプレートでできること
 
-### どの変更をどちらに入れるか
-
-| 変更の種類 | 編集先 |
+| 機能 | 説明 |
 |---|---|
-| CI ワークフローの修正 | テンプレート基盤で編集 → migrate で実働先へ反映 |
-| マニュアル・ドキュメントの更新 | テンプレート基盤で編集 → migrate で実働先へ反映 |
-| AI ルール（agents/）の更新 | テンプレート基盤で編集 → migrate で実働先へ反映 |
-| Wix ページのビジュアル編集 | 実働先リポジトリの Wix Studio 上で直接編集 |
-| Velo コード（`src/`）の修正 | 実働先リポジトリで直接編集。テンプレートへ持ち込まない |
-| `wix.config.json` の変更 | 実働先リポジトリのみ。テンプレートへ持ち込まない |
+| デザインチェック自動化 | `npm run check:design` でフォントサイズ・カラー数を自動検証 |
+| AI デザインレビュー | `/design-review` で全チェック項目を評価しレポート出力 |
+| Figma 取り込み | `/wix-from-figma <URL>` でモックアップ + Velo コードを生成 |
+| PR 品質ゲート | PR ごとにデザインチェックを含む全テストを自動実行 |
 
-同期方向は **テンプレート基盤 → 実働先（片方向のみ）**。逆方向（実働先 → テンプレート）の同期は行わない。
+---
 
-## 新案件で差し替える値
+## 新案件の立ち上げ手順
 
-新案件でこのテンプレートを使う際に変更が必要な変数は `docs/template-vars.md` にまとめています。
-主な差し替え対象：実働先リポジトリ名・siteId・GitHub Secrets（WIX_API_KEY・NPM_TOKEN）
-
-## 実働先への資産移植
-
-```bash
-git clone <テンプレート基盤の GitHub URL> /tmp/template
-git clone <実働先の GitHub URL> /tmp/working-repo
-bash /tmp/template/scripts/migrate-to-wix-repo.sh /tmp/working-repo
+```
+1. 「Use this template」で新リポジトリを作成
+2. wix login → wix dev でサイトに接続
+3. global.css のブランドカラー・フォントを変更
+4. /wix-from-figma <FigmaURL> でモックアップ生成
+5. /design-review でチェック → 修正 → PR → wix publish
 ```
 
-詳細は `docs/wix/import-runbook.md` を参照。
+詳細 → `docs/manuals/new-project-setup.md`
 
-## テンプレート化で残すもの
+---
 
-テンプレート化しても、次の運用資産は保持対象とする。
+## ワークフロー概要
 
-- `agents/` と `.agents/`
-- `.github/PULL_REQUEST_TEMPLATE.md`
-- `.github/workflows/pr-ci.yml`
-- `.github/workflows/pr-gate.yml`
-- `scripts/pr-up.js`
+```
+Figma デザイン
+    ↓  /wix-from-figma <URL>  （Claude が実行）
+HTMLモックアップ + Velo コード雛形を生成
+    ↓  /design-review <ファイル>  （Claude が実行）
+デザインチェックレポート（自動 + AI 評価）
+    ↓  Claude がコード修正
+global.css / Veloコード 更新
+    ↓  PR → マージ → wix publish
+Wix Studio に反映
+    ↓
+デザイナーが Wix Editor で仕上げ
+```
 
-案件固有の接続履歴や `siteId` 固定値は整理対象だが、PR 運用と Skills の土台は削除対象にしない。
+---
 
-## CI の目的
+## Claude Code でできること / できないこと
 
-`main` push 時に GitHub Actions（`wix-preview-on-push`）が `wix preview` を実行し、プレビュー URL を生成します。
-本番公開（`wix publish`）はドメイン設定・課金整備後に管理者が手動で行います。
+| できること | できないこと（Wix Editor 必須） |
+|---|---|
+| CSS トークン・ホバー・フォーカスの整備 | 新しいセクション・カラムの追加 |
+| フォームバリデーション・CMS 連携 | ブレイクポイントごとの配置調整 |
+| 要素の動的表示切替（Velo） | 画像・動画のアップロード |
+| デザインチェック自動検証 | アニメーション設定 |
 
-## ドキュメント一覧
+---
 
-### Wix 連携
-- セットアップ手順: `docs/wix/connection-plan.md`
-- 移植 Runbook: `docs/wix/import-runbook.md`
-- 成果物一覧: `docs/wix/artifact-index.md`
+## よく使うコマンド
 
-### 非エンジニア向け
+```bash
+# デザインチェック（CSS token 自動検証）
+npm run check:design
+
+# 全テスト（PR 前に必ず通す）
+npm test
+
+# PR 作成
+node scripts/pr-up.js
+
+# Wix Studio に公開
+wix publish   # → 「Latest commit from origin/main」を選択
+
+# Wix ローカル開発
+wix dev --tunnel
+```
+
+---
+
+## 案件ごとに変更する値
+
+| 項目 | ファイル |
+|---|---|
+| ブランドカラー・フォント | `src/styles/global.css` の `:root` |
+| サイト ID | `wix.config.json`（`wix dev` で自動設定） |
+| ページ Velo コード | `src/pages/<ページ名>.<pageId>.js` |
+
+詳細 → `docs/template-vars.md`
+
+---
+
+## ドキュメント
+
+### セットアップ・運用
+- **新案件セットアップ手順**: `docs/manuals/new-project-setup.md`
+- デザインレビュー & Wix 反映ワークフロー: `docs/manuals/design-review-workflow.md`
 - 立ち上げマニュアル: `docs/manuals/wix-startup-manual.md`
-- チェックリスト: `docs/manuals/wix-startup-checklist.md`
-- 用語集: `docs/manuals/wix-glossary.md`
+- 立ち上げチェックリスト: `docs/manuals/wix-startup-checklist.md`
 - 役割分担表: `docs/manuals/who-does-what.md`
+- トラブルシューティング: `docs/manuals/troubleshooting-for-nonengineers.md`
+- 用語集: `docs/manuals/wix-glossary.md`
+
+### 品質基準
+- デザインチェックシート: `agents/rules/60-design-quality.md`
+- デザインチェックシート（原本 CSV）: `docs/quality/design-checklist.csv`
+
+### AI ルール
+- Claude Code 運用ルール: `AGENTS.md`
+- コマンド定義: `agents/commands/`
+- ルール定義: `agents/rules/`

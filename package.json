@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "type": "commonjs",
   "scripts": {
-    "test": "npm run check:structure && npm run check:sot-dup",
+    "test": "npm run check:structure && npm run check:sot-dup && npm run check:design",
     "wix:help": "npx wix --help",
     "wix:version": "npx wix --version",
+    "wix:whoami": "HOME=/tmp XDG_CONFIG_HOME=/tmp npx wix whoami",
+    "wix:login": "HOME=/tmp XDG_CONFIG_HOME=/tmp npx wix login",
+    "wix:dev": "HOME=/tmp XDG_CONFIG_HOME=/tmp npx wix dev",
     "check:structure": "node scripts/check-structure.js",
-    "check:sot-dup": "node scripts/check-sot-dup.js"
+    "check:sot-dup": "node scripts/check-sot-dup.js",
+    "check:design": "node scripts/design-check.js"
   },
   "devDependencies": {
     "@wix/cli": "^1.1.166"
