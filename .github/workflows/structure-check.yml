@@ -1,9 +1,23 @@
 name: Structure Check
 
+# agents-structure.yml を統合。
+# 旧 agents-structure にあった paths フィルタ・concurrency を維持しつつ、
+# structure-check 側の node 直接呼び出しコマンドを採用。
+
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened]
     branches: [main]
+    paths:
+      - "agents/**"
+      - "docs/ai/**"
+      - "scripts/check-structure.js"
+      - "package.json"
+      - "src/**"
+
+concurrency:
+  group: structure-check-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check-structure:

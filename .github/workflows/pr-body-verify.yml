@@ -2,7 +2,7 @@ name: PR Body Verify
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened]
     branches: [main]
 
 jobs:
@@ -15,10 +15,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.22.0'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
 
       - name: Write PR body to file
         env:
