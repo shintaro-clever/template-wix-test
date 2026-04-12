@@ -13,14 +13,7 @@
 
 ## Absolute Rules
 
-- `main` / `master` で作業しない。必ず feature ブランチで作業する。
-- `--dangerously-bypass-approvals-and-sandbox` を使わない。
-- `--sandbox=danger-full-access` を使わない。
-- 破壊的コマンド（例: `rm -rf`）を安易に実行しない。
-- `.env` / `auth.json` の中身を出力しない。
-- シークレット（API キー・トークン）を出力しない。
-- `/tmp/pr.md` を手動編集しない。
-- `.github/PULL_REQUEST_TEMPLATE.md` のプレースホルダー文字列を変更しない。
+グローバル設定（`~/.claude/CLAUDE.md`）に準拠。
 
 ## Branch / PR Workflow
 
