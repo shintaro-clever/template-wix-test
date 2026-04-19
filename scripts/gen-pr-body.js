@@ -90,9 +90,17 @@ function main() {
     safeRun("git", ["diff", "--stat", "HEAD~1..HEAD"]) ||
     safeRun("git", ["diff", "--stat"]);
 
-  const summaryLines = files.length > 0
-    ? files.slice(0, 7).map((file) => `- ${file}`).join("\n")
-    : "- 変更ファイルの検出に失敗したため、git diff を確認してください";
+  // コミットメッセージの body から変更説明を取得（「変更内容:」セクション以降）
+  const commitLog = safeRun("git", ["log", `${base}...HEAD`, "--pretty=format:%B", "--"]) ||
+    safeRun("git", ["log", "HEAD~1..HEAD", "--pretty=format:%B", "--"]);
+  const commitBodyLines = commitLog.split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("- ") && l.length > 4);
+  const summaryLines = commitBodyLines.length > 0
+    ? commitBodyLines.slice(0, 7).join("\n")
+    : files.length > 0
+      ? files.slice(0, 7).map((file) => `- ${file}: 変更内容を確認してください`).join("\n")
+      : "- 変更ファイルの検出に失敗したため、git diff を確認してください";
 
   const issueNumber = parseIssueNumber(branch);
   const issueSection = issueNumber && issueNumber > 0
@@ -106,7 +114,7 @@ function main() {
   );
   output = output.replace(
     /## 変更内容（AIが埋める）[\s\S]*?- （AI）変更点を箇条書きで3〜7行（何をどう変えたか）\n- （AI）影響範囲（UI \/ API \/ DB \/ Config \/ Docs など）を明記\n- （AI）リスクがあれば1行（例：既存画面の表示崩れの可能性）\n/,
-    `## 変更内容（AIが埋める）\n${summaryLines}\n- 影響範囲: ${summarizeImpact(files)}\n- リスク: 差分に応じた設定・運用の確認が必要\n`
+    `## 変更内容（AIが埋める）\n${summaryLines}\n- 影響範囲: ${summarizeImpact(files)} — ファイル変更に応じて確認\n- リスク: 差分に応じた設定・運用の確認が必要\n`
   );
   output = output.replace(
     /## 関連Issue（どちらか1つチェック）[\s\S]*?- \[ \] 関連Issueあり: #<issue_number>\n- \[ \] No Issue（理由）: <軽度修正のため \/ 文言修正 \/ CI調整 など>\n/,
